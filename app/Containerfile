@@ -1,0 +1,36 @@
+FROM registry1.dso.mil/ironbank/opensource/python:v3.12
+
+# CIS Benchmark L2: run as non-root user.
+# Iron Bank python image provides the 'python' user — no useradd needed.
+USER python
+
+WORKDIR /home/python
+
+# Ensure user-local bin (pip-installed scripts) is on PATH.
+# Required because we install as non-root into ~/.local/bin.
+ENV PATH="/home/python/.local/bin:${PATH}"
+
+# Copy package metadata AND source together so setuptools can resolve
+# [tool.setuptools.packages.find] where = ["src"] during the wheel build.
+COPY --chown=python:python pyproject.toml .
+COPY --chown=python:python src/ ./src/
+
+# Upgrade pip then install the package with its [standard] extras.
+# pip installs to ~/.local because system site-packages is not writable
+# as a non-root user — this is expected and correct for Iron Bank images.
+RUN pip install --no-cache-dir --upgrade pip \
+    && pip install --no-cache-dir ".[standard]"
+
+# Copy runtime assets needed by the application.
+COPY --chown=python:python base-template/ ./base-template/
+
+# Create the generated-apps output directory owned by the runtime user.
+RUN mkdir -p generated-apps
+
+EXPOSE 8000
+
+# Health check — polls the /health endpoint every 30 s.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

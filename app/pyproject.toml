@@ -1,0 +1,77 @@
+[project]
+name = "ai-app-generator"
+version = "2.0.0"
+description = "AI-powered web application generator using FastAPI and Python"
+requires-python = ">=3.11"
+dependencies = [
+    # Web framework - pinned past Pydantic v1 removal (0.114+)
+    "fastapi>=0.115.0",
+    # ASGI server - 0.34+ required for Python 3.10+ support
+    "uvicorn[standard]>=0.34.0",
+    # Anthropic SDK - 0.25 was over a year old
+    "anthropic>=0.50.0",
+    "httpx>=0.27.0",
+    # Jinja2 3.1.5+ patches XSS/sandbox-bypass CVEs
+    "jinja2>=3.1.5",
+    # Pydantic 2.8.0+ required for Python 3.13 compatibility (pydantic-core PyO3 fix)
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.3.0",
+    "python-dotenv>=1.0.0",
+    # psutil 6.x improves Python 3.13 support
+    "psutil>=6.0.0",
+    # cryptography 44.x patches multiple CVEs present in 42.x/43.x
+    "cryptography>=44.0.0",
+    # python-multipart 0.0.18+ includes security patches
+    "python-multipart>=0.0.18",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "bandit>=1.8.0",
+    "pip-audit>=2.9.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+]
+
+[build-system]
+# IMPORTANT: setuptools.backends.legacy is an internal pip fallback only.
+# It must NOT be used in pyproject.toml - use setuptools.build_meta instead.
+requires = ["setuptools>=72.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# Include non-Python assets so they are installed into site-packages/app/
+# alongside the Python modules. Required because main.py resolves template
+# and static paths relative to __file__ (i.e. inside site-packages).
+[tool.setuptools.package-data]
+"app" = [
+    "templates/*.html",
+    "static/**/*",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "S", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_configs = true
+strict = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = []

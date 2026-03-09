@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Application Generator</title>
+
+  <!-- Tailwind CSS via CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Inter + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            slate: {
+              950: '#0f172a',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    #log-panel { scrollbar-width: thin; scrollbar-color: #334155 #1e293b; }
+    #log-panel::-webkit-scrollbar { width: 6px; }
+    #log-panel::-webkit-scrollbar-track { background: #1e293b; }
+    #log-panel::-webkit-scrollbar-thumb { background: #334155; border-radius: 3px; }
+  </style>
+</head>
+
+<body class="bg-slate-950 text-slate-50 min-h-screen flex flex-col">
+
+  <!-- ===== HEADER ===== -->
+  <header class="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center text-white font-bold text-sm">AI</div>
+      <span class="font-semibold text-lg">Application Generator</span>
+      <span class="text-xs text-slate-500 font-mono">v2.0</span>
+    </div>
+    <div id="status-badge" class="text-xs font-mono text-slate-400 px-3 py-1 rounded-full border border-slate-700">
+      Ready
+    </div>
+  </header>
+
+  <!-- ===== MAIN CONTENT ===== -->
+  <main class="flex-1 container mx-auto max-w-5xl px-6 py-8">
+
+    <!-- ===================================================================
+         VIEW 1: INPUT
+    ==================================================================== -->
+    <div id="view-input">
+      <h1 class="text-2xl font-semibold mb-2">Describe your application</h1>
+      <p class="text-slate-400 mb-6 text-sm">Enter a plain English description. The AI will generate an implementation plan for your review before writing any code.</p>
+
+      <!-- Requirement input -->
+      <div class="mb-4">
+        <label class="block text-sm font-medium text-slate-300 mb-2">Application Requirement</label>
+        <textarea
+          id="requirement"
+          rows="6"
+          placeholder="e.g. Build a task management app with priorities and due dates..."
+          class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-50 placeholder-slate-500 focus:outline-none focus:border-blue-500 resize-none font-mono text-sm"
+        ></textarea>
+      </div>
+
+      <!-- Example prompts -->
+      <div class="mb-6">
+        <p class="text-xs text-slate-500 mb-2">Example prompts:</p>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="setExample('Build a todo list app with task completion and deletion')"
+            class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer transition-colors">
+            Todo list app
+          </button>
+          <button onclick="setExample('Create a simple contact book with name, email and phone number fields')"
+            class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer transition-colors">
+            Contact book
+          </button>
+          <button onclick="setExample('Build a simple calculator with a clean dark UI')"
+            class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer transition-colors">
+            Calculator
+          </button>
+          <button onclick="setExample('Create a note-taking app with markdown preview support')"
+            class="text-xs px-3 py-1 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 cursor-pointer transition-colors">
+            Note-taking app
+          </button>
+        </div>
+      </div>
+
+      <!-- Configuration panel -->
+      <div class="bg-slate-800 border border-slate-700 rounded-lg p-5 mb-6">
+        <h2 class="text-sm font-semibold text-slate-300 mb-4">AI Provider Configuration</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Provider</label>
+            <select id="provider" class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-50 text-sm focus:outline-none focus:border-blue-500">
+              <option value="claude">Claude (Anthropic)</option>
+              <option value="minimax">Minimax</option>
+            </select>
+          </div>
+          <div class="md:col-span-2">
+            <label class="block text-xs text-slate-400 mb-1">API Key</label>
+            <input id="api-key" type="password" placeholder="Enter your API key..."
+              class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-50 text-sm focus:outline-none focus:border-blue-500 font-mono" />
+          </div>
+        </div>
+        <div class="mt-3 flex items-center gap-2">
+          <button id="btn-configure" onclick="configureProvider()"
+            class="text-xs px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded text-slate-200 transition-colors">
+            Validate &amp; Save
+          </button>
+          <span id="config-status" class="text-xs text-slate-500"></span>
+        </div>
+      </div>
+
+      <!-- Error message -->
+      <div id="input-error" class="hidden mb-4 p-3 bg-red-900/30 border border-red-700 rounded-lg text-red-300 text-sm"></div>
+
+      <!-- Generate plan button -->
+      <button id="btn-generate-plan" onclick="generatePlan()"
+        class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:cursor-not-allowed rounded-lg font-semibold text-sm transition-colors">
+        Generate Plan
+      </button>
+    </div>
+
+
+    <!-- ===================================================================
+         VIEW 2: PLAN REVIEW
+    ==================================================================== -->
+    <div id="view-plan" class="hidden">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-semibold">Review Implementation Plan</h1>
+          <p class="text-slate-400 text-sm mt-1">Review and edit the plan below, then submit for code generation.</p>
+        </div>
+        <button onclick="showView('input')" class="text-sm text-slate-400 hover:text-slate-200 transition-colors">← Back</button>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <!-- Original requirement (read-only) -->
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-2">Original Requirement</label>
+          <div id="plan-requirement-display"
+            class="bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-300 text-sm h-64 overflow-y-auto font-mono whitespace-pre-wrap">
+          </div>
+        </div>
+
+        <!-- Editable plan -->
+        <div>
+          <label class="block text-xs font-medium text-slate-400 mb-2">Generated Plan <span class="text-slate-600">(editable)</span></label>
+          <textarea id="plan-editor" rows="12"
+            class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-slate-50 text-sm h-64 resize-none focus:outline-none focus:border-blue-500 font-mono">
+          </textarea>
+        </div>
+      </div>
+
+      <div class="flex gap-3">
+        <button onclick="regeneratePlan()"
+          class="px-5 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+          ↻ Regenerate Plan
+        </button>
+        <button onclick="submitForExecution()"
+          class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 rounded-lg text-sm font-semibold transition-colors">
+          Submit for Execution →
+        </button>
+      </div>
+    </div>
+
+
+    <!-- ===================================================================
+         VIEW 3: EXECUTION
+    ==================================================================== -->
+    <div id="view-execution" class="hidden">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="text-2xl font-semibold">Generating &amp; Deploying</h1>
+          <p class="text-slate-400 text-sm mt-1">Your application is being generated and deployed.</p>
+        </div>
+        <button onclick="stopApp()"
+          class="px-4 py-2 bg-red-900/40 hover:bg-red-900/70 border border-red-700 rounded-lg text-red-300 text-sm transition-colors">
+          ■ Cancel
+        </button>
+      </div>
+
+      <!-- Progress bar -->
+      <div class="mb-4">
+        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+          <span id="phase-label">Initialising...</span>
+          <span id="progress-pct">0%</span>
+        </div>
+        <div class="h-2 bg-slate-800 rounded-full overflow-hidden">
+          <div id="progress-bar" class="h-full bg-blue-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Terminal log -->
+      <div id="log-panel"
+        class="bg-slate-900 border border-slate-700 rounded-lg p-4 h-80 overflow-y-auto font-mono text-xs text-slate-300 space-y-1">
+        <div class="text-slate-600"># Waiting for log output...</div>
+      </div>
+    </div>
+
+
+    <!-- ===================================================================
+         VIEW 4: SUCCESS
+    ==================================================================== -->
+    <div id="view-success" class="hidden text-center py-12">
+      <div class="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+        </svg>
+      </div>
+      <h1 class="text-2xl font-semibold mb-2 text-green-400">Application Deployed!</h1>
+      <p class="text-slate-400 mb-6">Your application is running and has been opened in your browser.</p>
+
+      <div class="max-w-sm mx-auto mb-6">
+        <label class="block text-xs text-slate-500 mb-1">Application URL</label>
+        <div class="flex items-center gap-2">
+          <input id="success-url" type="text" readonly
+            class="flex-1 bg-slate-800 border border-slate-700 rounded px-3 py-2 text-blue-400 font-mono text-sm focus:outline-none" />
+          <button onclick="copyUrl()" class="px-3 py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs transition-colors">Copy</button>
+        </div>
+      </div>
+
+      <div class="flex justify-center gap-4">
+        <a id="open-browser-link" href="#" target="_blank"
+          class="px-6 py-2.5 bg-green-600 hover:bg-green-500 rounded-lg text-sm font-medium transition-colors">
+          Open in Browser ↗
+        </a>
+        <button onclick="startNew()"
+          class="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 rounded-lg text-sm font-medium transition-colors">
+          Start New Generation
+        </button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ===== JAVASCRIPT ===== -->
+  <script>
+    // ---------------------------------------------------------------------------
+    // State
+    // ---------------------------------------------------------------------------
+    const APP_PORT = {{ app_port }};
+    let currentRequirement = '';
+    let ws = null;
+    let pollInterval = null;
+
+    // ---------------------------------------------------------------------------
+    // View management
+    // ---------------------------------------------------------------------------
+    function showView(name) {
+      ['input', 'plan', 'execution', 'success'].forEach(v => {
+        document.getElementById('view-' + v).classList.add('hidden');
+      });
+      document.getElementById('view-' + name).classList.remove('hidden');
+    }
+
+    function setStatusBadge(text, colour) {
+      const badge = document.getElementById('status-badge');
+      badge.textContent = text;
+      badge.className = `text-xs font-mono px-3 py-1 rounded-full border ${colour}`;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Example prompts
+    // ---------------------------------------------------------------------------
+    function setExample(text) {
+      document.getElementById('requirement').value = text;
+    }
+
+    // ---------------------------------------------------------------------------
+    // Configuration
+    // ---------------------------------------------------------------------------
+    async function configureProvider() {
+      const provider = document.getElementById('provider').value;
+      const apiKey = document.getElementById('api-key').value.trim();
+      const statusEl = document.getElementById('config-status');
+
+      if (!apiKey) {
+        statusEl.textContent = 'Please enter an API key.';
+        statusEl.className = 'text-xs text-red-400';
+        return;
+      }
+
+      statusEl.textContent = 'Validating...';
+      statusEl.className = 'text-xs text-slate-400';
+
+      try {
+        const res = await fetch('/api/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ provider, api_key: apiKey }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = data.detail || 'Validation failed.';
+          statusEl.className = 'text-xs text-red-400';
+        } else {
+          statusEl.textContent = `✓ ${provider} configured`;
+          statusEl.className = 'text-xs text-green-400';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Network error.';
+        statusEl.className = 'text-xs text-red-400';
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Stage 1: Generate plan
+    // ---------------------------------------------------------------------------
+    async function generatePlan() {
+      const requirement = document.getElementById('requirement').value.trim();
+      const errorEl = document.getElementById('input-error');
+
+      errorEl.classList.add('hidden');
+
+      if (requirement.length < 10) {
+        errorEl.textContent = 'Please enter at least 10 characters.';
+        errorEl.classList.remove('hidden');
+        return;
+      }
+
+      currentRequirement = requirement;
+      setStatusBadge('Generating plan...', 'text-blue-400 border-blue-800');
+      document.getElementById('btn-generate-plan').disabled = true;
+
+      try {
+        const res = await fetch('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requirement }),
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          errorEl.textContent = data.detail || 'Plan generation failed.';
+          errorEl.classList.remove('hidden');
+          setStatusBadge('Error', 'text-red-400 border-red-800');
+          return;
+        }
+
+        document.getElementById('plan-requirement-display').textContent = requirement;
+        document.getElementById('plan-editor').value = data.plan;
+        showView('plan');
+        setStatusBadge('Plan ready', 'text-green-400 border-green-800');
+      } catch (err) {
+        errorEl.textContent = 'Network error. Please try again.';
+        errorEl.classList.remove('hidden');
+        setStatusBadge('Error', 'text-red-400 border-red-800');
+      } finally {
+        document.getElementById('btn-generate-plan').disabled = false;
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Plan: Regenerate
+    // ---------------------------------------------------------------------------
+    async function regeneratePlan() {
+      try {
+        const res = await fetch('/api/plan', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requirement: currentRequirement, refine: true }),
+        });
+        const data = await res.json();
+        if (res.ok) {
+          document.getElementById('plan-editor').value = data.plan;
+        }
+      } catch (err) {
+        console.error('Regenerate failed:', err);
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Stage 2: Submit for execution
+    // ---------------------------------------------------------------------------
+    async function submitForExecution() {
+      const plan = document.getElementById('plan-editor').value.trim();
+      if (!plan) return;
+
+      showView('execution');
+      setStatusBadge('Deploying...', 'text-yellow-400 border-yellow-800');
+      clearLog();
+      connectWebSocket();
+
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requirement: currentRequirement, plan }),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          appendLog('error', data.detail || 'Generation failed.');
+        }
+      } catch (err) {
+        appendLog('error', 'Network error starting generation.');
+      }
+
+      startPolling();
+    }
+
+    // ---------------------------------------------------------------------------
+    // WebSocket
+    // ---------------------------------------------------------------------------
+    function connectWebSocket() {
+      const wsUrl = `ws://127.0.0.1:${APP_PORT}/ws/logs`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          appendLog(msg.level, msg.message);
+        } catch (e) {
+          appendLog('info', event.data);
+        }
+      };
+
+      ws.onerror = () => appendLog('error', 'WebSocket connection error.');
+      ws.onclose = () => console.log('WebSocket closed.');
+    }
+
+    // ---------------------------------------------------------------------------
+    // Status polling
+    // ---------------------------------------------------------------------------
+    function startPolling() {
+      pollInterval = setInterval(async () => {
+        try {
+          const res = await fetch('/api/status');
+          const data = await res.json();
+          updateProgress(data);
+
+          if (data.phase === 'running' && data.url) {
+            clearInterval(pollInterval);
+            disconnectWebSocket();
+            showSuccess(data.url);
+          } else if (data.phase === 'idle' && data.progress === 0 && data.message.startsWith('Error')) {
+            clearInterval(pollInterval);
+            disconnectWebSocket();
+            appendLog('error', data.message);
+            setStatusBadge('Error', 'text-red-400 border-red-800');
+          }
+        } catch (e) {
+          // Polling failure — keep trying
+        }
+      }, 1500);
+    }
+
+    function updateProgress(data) {
+      document.getElementById('phase-label').textContent = data.message || '';
+      document.getElementById('progress-pct').textContent = data.progress + '%';
+      document.getElementById('progress-bar').style.width = data.progress + '%';
+    }
+
+    // ---------------------------------------------------------------------------
+    // Log panel
+    // ---------------------------------------------------------------------------
+    function appendLog(level, message) {
+      const panel = document.getElementById('log-panel');
+      const line = document.createElement('div');
+      const colours = {
+        info: 'text-slate-300',
+        success: 'text-green-400',
+        error: 'text-red-400',
+      };
+      line.className = `font-mono ${colours[level] || 'text-slate-300'}`;
+      const prefix = level === 'error' ? '✗' : level === 'success' ? '✓' : '›';
+      line.textContent = `${prefix} ${message}`;
+      panel.appendChild(line);
+      panel.scrollTop = panel.scrollHeight;
+    }
+
+    function clearLog() {
+      document.getElementById('log-panel').innerHTML = '';
+    }
+
+    // ---------------------------------------------------------------------------
+    // Success view
+    // ---------------------------------------------------------------------------
+    function showSuccess(url) {
+      document.getElementById('success-url').value = url;
+      document.getElementById('open-browser-link').href = url;
+      showView('success');
+      setStatusBadge('Running', 'text-green-400 border-green-800');
+    }
+
+    function copyUrl() {
+      const url = document.getElementById('success-url').value;
+      navigator.clipboard.writeText(url).catch(() => {});
+    }
+
+    // ---------------------------------------------------------------------------
+    // Stop / new generation
+    // ---------------------------------------------------------------------------
+    async function stopApp() {
+      clearInterval(pollInterval);
+      disconnectWebSocket();
+      try {
+        await fetch('/api/stop', { method: 'POST' });
+      } catch (e) {}
+      showView('input');
+      setStatusBadge('Ready', 'text-slate-400 border-slate-700');
+    }
+
+    function startNew() {
+      stopApp();
+    }
+
+    function disconnectWebSocket() {
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+    }
+  </script>
+
+</body>
+</html>
