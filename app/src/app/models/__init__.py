@@ -4,16 +4,32 @@ All user-facing inputs are validated here before any business logic runs.
 This satisfies OWASP A03 (Injection) and NIST SP 800-53 SI-10.
 """
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
+from typing_extensions import Self
 
 
 class ConfigRequest(BaseModel):
-    """Request body for POST /api/config."""
+    """Request body for POST /api/config.
+
+    Built-in providers (set ``provider`` to one of these, no extra fields):
+        ``claude``   — Anthropic Claude
+        ``minimax``  — Minimax
+        ``gemini``   — Google Gemini
+
+    Custom OpenAI-compatible provider (``provider`` = any other identifier):
+        Both ``base_url`` and ``model`` are **required** for custom providers.
+    """
 
     provider: str = Field(
         ...,
-        pattern="^(claude|minimax)$",
-        description="AI provider name: 'claude' or 'minimax'",
+        min_length=1,
+        max_length=64,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description=(
+            "AI provider name. Built-in values: 'claude', 'minimax', 'gemini'. "
+            "Any other value is treated as a custom OpenAI-compatible provider "
+            "and requires 'base_url' and 'model' to also be supplied."
+        ),
     )
     api_key: str = Field(
         ...,
@@ -21,8 +37,62 @@ class ConfigRequest(BaseModel):
         max_length=512,
         description="Provider API key — held in memory only, never persisted",
     )
+    base_url: str | None = Field(
+        default=None,
+        max_length=2048,
+        description=(
+            "Base URL of the OpenAI-compatible endpoint. "
+            "Required for custom providers. "
+            "Example: 'https://api.openai.com/v1'"
+        ),
+    )
+    model: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=256,
+        description=(
+            "Model identifier as expected by the remote service. "
+            "Required for custom providers."
+        ),
+    )
 
-    model_config = {"json_schema_extra": {"example": {"provider": "claude", "api_key": "sk-ant-..."}}}
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url_protocol(cls, v: str | None) -> str | None:
+        if v is not None and not (
+            v.startswith("http://") or v.startswith("https://")
+        ):
+            raise ValueError("base_url must start with 'http://' or 'https://'")
+        return v
+
+    @model_validator(mode="after")
+    def custom_provider_requires_base_url_and_model(self) -> Self:
+        builtin = {"claude", "minimax", "gemini"}
+        if self.provider.lower() not in builtin:
+            if not self.base_url:
+                raise ValueError(
+                    f"'base_url' is required for custom provider '{self.provider}'"
+                )
+            if not self.model:
+                raise ValueError(
+                    f"'model' is required for custom provider '{self.provider}'"
+                )
+        return self
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {"provider": "claude", "api_key": "sk-ant-..."},
+                {"provider": "gemini", "api_key": "AIza..."},
+                {
+                    "provider": "my-llm",
+                    "api_key": "my-key",
+                    "base_url": "https://api.example.com/v1",
+                    "model": "my-model-name",
+                },
+            ]
+        }
+    }
 
 
 class PlanRequest(BaseModel):

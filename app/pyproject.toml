@@ -11,6 +11,9 @@ dependencies = [
     # Anthropic SDK - 0.25 was over a year old
     "anthropic>=0.50.0",
     "httpx>=0.27.0",
+    # certifi provides an up-to-date Mozilla CA bundle used by all providers
+    # to fix SSL: CERTIFICATE_VERIFY_FAILED on some environments
+    "certifi>=2024.0.0",
     # Jinja2 3.1.5+ patches XSS/sandbox-bypass CVEs
     "jinja2>=3.1.5",
     # Pydantic 2.8.0+ required for Python 3.13 compatibility (pydantic-core PyO3 fix)

@@ -70,12 +70,22 @@ async def configure(request: ConfigRequest) -> dict[str, str]:
     It is never written to disk or included in any log output.
     """
     try:
-        provider = create_provider(request.provider, request.api_key)
+        provider = create_provider(
+            request.provider,
+            request.api_key,
+            base_url=request.base_url,
+            model=request.model,
+        )
         # Validate credentials with a low-cost probe call
         await provider.generate("Hello", "Reply with the single word: ok")
     except AIProviderError as exc:
         logger.warning("Provider configuration failed: %s", exc)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+
+    # Close the previous provider's HTTP client if it exposes aclose()
+    old_provider = state.get_provider()
+    if old_provider is not None and hasattr(old_provider, "aclose"):
+        await old_provider.aclose()
 
     state.set_provider(provider)
     state.set_status("idle", 0, "Provider configured. Ready to generate.")

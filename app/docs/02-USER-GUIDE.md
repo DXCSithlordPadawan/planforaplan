@@ -43,7 +43,7 @@ You do not need to write any code, open a terminal, or install any additional to
 ### Requirements
 
 - **Python 3.11 or later** installed on your machine ([python.org](https://python.org))
-- **An API key** for either Anthropic Claude or Minimax
+- **An API key** for one of the supported AI providers (Claude, Minimax, Gemini, or any OpenAI-compatible service)
 - **Internet access** for AI API calls and for loading the Tailwind CSS stylesheet in generated apps
 - The application has been set up (i.e. `setup.bat` has been run successfully)
 
@@ -58,6 +58,17 @@ You do not need to write any code, open a terminal, or install any additional to
 1. Visit [api.minimax.chat](https://api.minimax.chat)
 2. Sign in and navigate to API Keys
 3. Create a new key
+
+**Gemini (Google):**
+1. Visit [aistudio.google.com](https://aistudio.google.com)
+2. Sign in and click **Get API key**
+3. Create a new key — it will start with `AIzaSy`
+
+**Custom (OpenAI-compatible):**
+Any provider that exposes the OpenAI chat completions API format can be used. You will need:
+- The **base URL** of the API endpoint (e.g. `https://api.openai.com/v1`, `http://localhost:11434/v1`)
+- The **model name** expected by that service (e.g. `gpt-4o`, `mistral-large`, `llama3`)
+- Your **API key** for the service
 
 Keep your API key private. Do not share it or paste it anywhere other than the configuration panel in this application.
 
@@ -96,9 +107,12 @@ To stop the orchestrator, press **Ctrl+C** in the Command Prompt window.
 
 In the **AI Provider Configuration** panel at the bottom of the input page:
 
-1. Select your provider from the dropdown: **Claude (Anthropic)** or **Minimax**.
+1. Select your provider from the dropdown: **Claude (Anthropic)**, **Minimax**, **Gemini (Google)**, or **Custom (OpenAI-compatible)**.
 2. Paste your API key into the **API Key** field.
-3. Click **Validate & Save**.
+3. If you selected **Custom (OpenAI-compatible)**, two additional fields appear:
+   - **Base URL** — the root URL of the API, e.g. `https://api.openai.com/v1`
+   - **Model** — the model identifier, e.g. `gpt-4o`
+4. Click **Validate & Save**.
 
 Wait for the status message next to the button. If it shows a green tick and the provider name, configuration was successful. If it shows an error, check that you selected the correct provider and that the key is complete and unmodified.
 
@@ -277,6 +291,12 @@ Solution: Re-enter the key carefully. Make sure the provider dropdown matches th
 
 Your account has hit the API rate limit. Wait 30–60 seconds then try again.
 
+### "Claude API error: Connection error." / "Network error calling Minimax: ..."
+
+An SSL certificate verification failure occurred when the application tried to reach the AI provider's API. This happens on some corporate networks or systems with non-standard certificate stores.
+
+The application uses the **certifi** CA bundle to provide correct root certificates independently of the host OS. If this error persists, check that your network allows outbound HTTPS connections to the provider's endpoint, and that no corporate proxy is intercepting TLS traffic without a trusted certificate.
+
 ### "No files were extracted from the AI response"
 
 The AI did not format its response correctly using the required XML file blocks. This occasionally happens with complex requirements. Solution: Click Cancel and try again. If it recurs, simplify the requirement.
@@ -335,6 +355,9 @@ The files on disk persist. The uvicorn subprocess that serves the app is termina
 
 **Can I use a different AI provider for different generations?**  
 Yes. Go back to the input view, update the provider and key in the configuration panel, click Validate & Save, then proceed with a new generation.
+
+**What providers are supported?**  
+Four options are built in: **Claude** (Anthropic), **Minimax**, **Gemini** (Google), and **Custom (OpenAI-compatible)**. The Custom option lets you connect to any provider that speaks the OpenAI chat completions format — including OpenAI itself, Mistral, Ollama (local), LM Studio, Azure OpenAI, OpenRouter, and others. For Custom, supply the Base URL and Model name in the configuration panel.
 
 **Is my API key stored anywhere on disk?**  
 No. API keys are held only in process memory and are discarded when the orchestrator server is stopped. They are never written to disk, log files, or any other persistent storage.
