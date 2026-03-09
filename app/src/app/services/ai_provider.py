@@ -169,15 +169,22 @@ class GeminiProvider:
     """Google Gemini AI provider using async httpx HTTP client."""
 
     API_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
-    MODEL = "gemini-1.5-pro"
+    MODEL = "gemini-2.0-flash"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         # Key held in memory only; never logged.
         self._api_key = api_key
+        self._model = model or self.MODEL
+        self._api_base = base_url.rstrip("/") if base_url else self.API_BASE
 
     async def generate(self, user_prompt: str, system_prompt: str) -> str:
         """Call the Gemini generateContent API and return the response text."""
-        url = f"{self.API_BASE}/{self.MODEL}:generateContent"
+        url = f"{self._api_base}/{self._model}:generateContent"
         # API key is passed via a request header to avoid it appearing in
         # server access logs (which record the request URL).
         headers = {
@@ -294,7 +301,7 @@ def create_provider(
     Built-in providers (case-insensitive):
         ``claude``   — Anthropic Claude (claude-sonnet-4-20250514)
         ``minimax``  — Minimax (abab6.5s-chat)
-        ``gemini``   — Google Gemini (gemini-1.5-pro)
+        ``gemini``   — Google Gemini (gemini-2.0-flash, overridable via model/base_url)
 
     Custom provider:
         Any other name is treated as a custom OpenAI-compatible provider.
@@ -303,9 +310,11 @@ def create_provider(
     Args:
         provider_name: Provider identifier (case-insensitive).
         api_key:       Provider API key — held in memory only.
-        base_url:      Required for custom providers. Base URL of the
+        base_url:      Optional override for built-in Gemini endpoint base URL.
+                       Required for custom providers. Base URL of the
                        OpenAI-compatible endpoint.
-        model:         Required for custom providers. Model identifier.
+        model:         Optional model override for Gemini (defaults to
+                       ``gemini-2.0-flash``). Required for custom providers.
 
     Raises:
         AIProviderError: If the provider is not recognised and
@@ -317,7 +326,7 @@ def create_provider(
         case "minimax":
             return MinimaxProvider(api_key)
         case "gemini":
-            return GeminiProvider(api_key)
+            return GeminiProvider(api_key, model=model, base_url=base_url)
         case _:
             if base_url and model:
                 return CustomProvider(api_key, base_url, model)
