@@ -1,6 +1,6 @@
 # AI Application Generator — Container Build Guide
 
-**Version:** 2.0  
+**Version:** 2.1  
 **Date:** March 2026  
 **Audience:** DevOps, System Administrators  
 **Container Runtime:** Podman (preferred) · Docker (compatible)  
@@ -32,7 +32,7 @@
 
 ## 1. Overview
 
-The application ships with a `Containerfile` (OCI-compatible; works with both Podman and Docker) located at `C:\saabdemo\app\Containerfile`.
+The application ships with a `Containerfile` (OCI-compatible; works with both Podman and Docker) located at `app/Containerfile`.
 
 The container image packages:
 - The Python 3.11-slim base image
@@ -100,64 +100,62 @@ All `podman` commands in this guide can be substituted with `docker` directly �
 
 ## 3. Containerfile Walkthrough
 
-The complete `Containerfile` is at `C:\saabdemo\app\Containerfile`. Here is a line-by-line explanation:
+The complete `Containerfile` is at `app/Containerfile`. Here is a line-by-line explanation:
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.12-slim
 ```
-Uses the official Python 3.11 slim image (Debian-based, minimal packages). The slim variant reduces image size and attack surface compared to the full `python:3.11` image.
+Uses the official Python 3.12 slim image (Debian-based, minimal packages). The slim variant reduces image size and attack surface compared to the full `python:3.12` image. This image is publicly available on Docker Hub — no credentials required.
 
 ---
 
 ```dockerfile
-RUN useradd --create-home appuser
+RUN groupadd --gid 1001 appuser \
+    && useradd --uid 1001 --gid appuser --shell /bin/bash --create-home appuser
+USER appuser
 WORKDIR /home/appuser/app
 ```
-Creates a non-root user `appuser` with a home directory, then sets the working directory under that home. This satisfies **CIS Benchmark Level 2** requirement to never run container processes as root.
+Creates a non-root user `appuser` (UID/GID 1001) with a home directory and immediately switches to it. This satisfies **CIS Benchmark Level 2** requirement to never run container processes as root. All subsequent layers and the runtime process run as `appuser`.
 
 ---
 
 ```dockerfile
-COPY pyproject.toml .
+ENV PATH="/home/appuser/.local/bin:${PATH}"
+```
+Adds the user-local pip scripts directory to `PATH`. Because we run as `appuser` (non-root), pip installs scripts to `~/.local/bin` rather than system directories.
+
+---
+
+```dockerfile
+COPY --chown=appuser:appuser pyproject.toml .
+COPY --chown=appuser:appuser src/ ./src/
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[standard]"
+    && pip install --no-cache-dir .
 ```
-Copies only `pyproject.toml` first, then installs all runtime dependencies. Doing this before copying source code is a **layer caching optimisation** — if only source code changes, Docker/Podman reuses the cached dependency layer and avoids a full pip install on rebuild.
+Copies package metadata and source, then installs all runtime dependencies. Doing `COPY pyproject.toml` before `COPY src/` is a **layer caching optimisation** — if only source code changes, Docker/Podman reuses the cached dependency layer.
 
-`--no-cache-dir` reduces image size by not storing the pip download cache in the layer.
-
-Note: `".[standard]"` installs the `standard` extras from `pyproject.toml` which includes uvicorn's full feature set.
-
-> ⚠️ **Known issue in Containerfile:** The install group is `".[standard]"` but `pyproject.toml` defines `[dev]` as the only optional extras group. The base runtime dependencies (listed under `dependencies`) are installed correctly by `"."` alone. The `".[standard]"` syntax will install base dependencies — Podman/Docker will warn but not fail. For a clean build, this should be corrected to `"."` unless an explicit `[standard]` extras group is added to `pyproject.toml`.
+`--no-cache-dir` reduces image size by not storing the pip download cache in the layer. The `.` installs the base runtime dependencies from `pyproject.toml` without any dev extras.
 
 ---
 
 ```dockerfile
-COPY src/ ./src/
-COPY base-template/ ./base-template/
+COPY --chown=appuser:appuser base-template/ ./base-template/
 ```
-Copies the application source and the base template (including its pre-installed `.venv/`) into the image. This is what makes sub-15-second generated app deployment possible — the venv is baked into the image.
+Copies the base template (including its pre-installed `.venv/`) into the image. This makes sub-15-second generated app deployment possible — the venv is baked into the image.
 
 ---
 
 ```dockerfile
-RUN mkdir -p generated-apps && chown appuser:appuser generated-apps
+RUN mkdir -p generated-apps
 ```
-Creates the `generated-apps/` directory (where generated applications are written at runtime) and assigns ownership to `appuser`. This is done as root (before `USER appuser`) so that the directory exists and is writable by the non-root user.
-
----
-
-```dockerfile
-USER appuser
-```
-Switches the active user to `appuser` for all subsequent instructions and the container runtime. All processes in the container run as this non-root user. **CIS Benchmark Level 2 compliance.**
+Creates the `generated-apps/` directory. This already runs as `appuser` so no `chown` is needed.
 
 ---
 
 ```dockerfile
 EXPOSE 8000
 ```
-Documents that the container listens on port 8000. This is informational — the actual port mapping is provided at `podman run` time.
+Documents that the container listens on port 8000. Informational — actual port mapping is provided at `podman run` / `docker run` time.
 
 ---
 
@@ -171,14 +169,12 @@ Configures the container health check:
 - Allows **10 seconds** startup grace before first check
 - Uses Python stdlib `urllib.request` — no curl or wget dependency needed
 
-The health check hits `GET /api/health`, which returns `{"status": "ok"}` when the FastAPI server is running.
-
 ---
 
 ```dockerfile
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 ```
-The default startup command. Note `--host 0.0.0.0` — inside the container, the server must bind to all interfaces so that the port mapping from `podman run -p` works. The external host binding is controlled by the `-p 127.0.0.1:8000:8000` flag at runtime.
+The default startup command. Note `--host 0.0.0.0` — inside the container, the server must bind to all interfaces so that the port mapping from `podman run -p` / `docker run -p` works. The external host binding is controlled by the `-p 127.0.0.1:8000:8000` flag at runtime.
 
 ---
 
@@ -186,15 +182,29 @@ The default startup command. Note `--host 0.0.0.0` — inside the container, the
 
 ### Standard Build (Podman)
 
+**Windows:**
 ```cmd
-cd C:\saabdemo\app
+cd C:\path\to\app
+podman build -t ai-app-generator:2.0 -f Containerfile .
+```
+
+**Linux / macOS:**
+```bash
+cd /path/to/app
 podman build -t ai-app-generator:2.0 -f Containerfile .
 ```
 
 ### Standard Build (Docker)
 
+**Windows:**
 ```cmd
-cd C:\saabdemo\app
+cd C:\path\to\app
+docker build -t ai-app-generator:2.0 -f Containerfile .
+```
+
+**Linux / macOS:**
+```bash
+cd /path/to/app
 docker build -t ai-app-generator:2.0 -f Containerfile .
 ```
 
@@ -332,7 +342,7 @@ Note: Inside the container, `APP_HOST` must be `0.0.0.0` (the uvicorn CMD alread
 
 Alternatively, pass individual variables:
 
-```cmd
+```bash
 podman run -d \
   --name ai-app-gen \
   -p 127.0.0.1:8000:8000 \
@@ -355,7 +365,7 @@ podman volume create ai-app-gen-apps
 
 ### Run with Volume Mounted
 
-```cmd
+```bash
 podman run -d \
   --name ai-app-gen \
   -p 127.0.0.1:8000:8000 \
@@ -372,12 +382,23 @@ podman run -d \
 
 To access generated app files directly from the host:
 
-```cmd
+**Linux / macOS:**
+```bash
 podman run -d \
   --name ai-app-gen \
   -p 127.0.0.1:8000:8000 \
   --env-file .env \
-  -v C:\saabdemo\app\generated-apps:/home/appuser/app/generated-apps:Z \
+  -v /path/to/app/generated-apps:/home/appuser/app/generated-apps:Z \
+  ai-app-generator:2.0
+```
+
+**Windows (Podman Desktop):**
+```cmd
+podman run -d ^
+  --name ai-app-gen ^
+  -p 127.0.0.1:8000:8000 ^
+  --env-file .env ^
+  -v C:\path\to\app\generated-apps:/home/appuser/app/generated-apps:Z ^
   ai-app-generator:2.0
 ```
 
@@ -524,22 +545,22 @@ ai-app-generator:latest
 ```
 
 Example version tags:
-```cmd
+```bash
 podman tag ai-app-generator:2.0 ai-app-generator:latest
-podman tag ai-app-generator:2.0 registry.example.local/saabdemo/ai-app-generator:2.0
+podman tag ai-app-generator:2.0 registry.example.local/ai-app-generator:2.0
 ```
 
 ### Pushing to a Registry
 
-```cmd
-REM Log in to registry
+```bash
+# Log in to registry
 podman login registry.example.local
 
-REM Tag for registry
-podman tag ai-app-generator:2.0 registry.example.local/saabdemo/ai-app-generator:2.0
+# Tag for registry
+podman tag ai-app-generator:2.0 registry.example.local/ai-app-generator:2.0
 
-REM Push
-podman push registry.example.local/saabdemo/ai-app-generator:2.0
+# Push
+podman push registry.example.local/ai-app-generator:2.0
 ```
 
 ### Saving to a Tar Archive (for air-gapped transfer)
@@ -560,23 +581,21 @@ podman load -i ai-app-generator-2.0.tar
 
 When source code or dependencies change, rebuild the image:
 
-```cmd
-cd C:\saabdemo\app
-
-REM Stop and remove the running container
+```bash
+# Stop and remove the running container
 podman rm -f ai-app-gen
 
-REM Rebuild the image
+# Rebuild the image
 podman build -t ai-app-generator:2.0 -f Containerfile .
 
-REM Run the new image
+# Run the new image
 podman run -d \
   --name ai-app-gen \
   -p 127.0.0.1:8000:8000 \
   --env-file .env \
   ai-app-generator:2.0
 
-REM Verify health
+# Verify health
 podman inspect ai-app-gen --format "{{.State.Health.Status}}"
 ```
 
@@ -624,7 +643,7 @@ podman logs ai-app-gen
 
 Common causes:
 - Missing `src/app/__init__.py` — causes `ModuleNotFoundError`
-- Bad `pyproject.toml` extras group name in `pip install ".[standard]"` — install fails silently
+- Bad pip install command — fix: verify the `Containerfile` uses `pip install --no-cache-dir .` (no extras)
 
 **Fix:** Rebuild with `--no-cache` and watch the full build output for errors.
 
@@ -673,7 +692,7 @@ podman run -d \
 
 **Fix:** Use forward slashes or quote the path:
 ```cmd
-podman run --env-file "C:/saabdemo/app/.env" ...
+podman run --env-file "C:/path/to/app/.env" ...
 ```
 
 ---
@@ -684,11 +703,11 @@ For deployments with no internet access (e.g., air-gapped networks):
 
 ### Step 1 — Pre-build on Internet-Connected Machine
 
-```cmd
-REM Build image
+```bash
+# Build image
 podman build -t ai-app-generator:2.0 -f Containerfile .
 
-REM Export to tar
+# Export to tar
 podman save -o ai-app-generator-2.0.tar ai-app-generator:2.0
 ```
 
@@ -698,7 +717,7 @@ Transfer `ai-app-generator-2.0.tar` to the air-gapped machine via USB, network s
 
 ### Step 3 — Load and Run on Air-Gapped Machine
 
-```cmd
+```bash
 podman load -i ai-app-generator-2.0.tar
 
 podman run -d \
@@ -735,11 +754,11 @@ Confirm no secrets are in any image layer:
 podman history ai-app-generator:2.0
 ```
 
-Review each layer's command for any sensitive strings. The only `RUN` commands should be `useradd`, `pip install`, `mkdir`, and `chown`.
+Review each layer's command for any sensitive strings. The only `RUN` commands should be `groupadd`/`useradd`, `pip install`, and `mkdir`.
 
 ### Non-Root Verification
 
-```cmd
+```bash
 podman run --rm ai-app-generator:2.0 whoami
 ```
 
@@ -755,7 +774,7 @@ When running with `--read-only`, the container's root filesystem is immutable. O
 |---------|------------------------------|----------|
 | Non-root user | `USER appuser` | CIS L2, NIST AC-6 |
 | HEALTHCHECK defined | `HEALTHCHECK` directive | CIS L2 |
-| Minimal base image | `python:3.11-slim` | CIS L2 |
+| Minimal base image | `python:3.12-slim` | CIS L2 |
 | No secrets in image | API keys via `--env-file` at runtime | NIST IA-5 |
 | Read-only root (runtime) | `--read-only` flag | CIS L2, NIST SC-28 |
 | All capabilities dropped | `--cap-drop ALL` (runtime) | CIS L2, NIST AC-6 |
@@ -765,5 +784,5 @@ When running with `--read-only`, the container's root filesystem is immutable. O
 
 ---
 
-*Document maintained at `C:\saabdemo\app\docs\10-CONTAINER-BUILD-GUIDE.md`*  
+*Document maintained at `app/docs/10-CONTAINER-BUILD-GUIDE.md`*  
 *References: Podman documentation — https://docs.podman.io; CIS Docker Benchmark — https://www.cisecurity.org/benchmark/docker; NIST SP 800-190 (Container Security) — https://csrc.nist.gov/publications/detail/sp/800-190/final*

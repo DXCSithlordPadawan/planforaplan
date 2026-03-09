@@ -1,28 +1,28 @@
-FROM registry1.dso.mil/ironbank/opensource/python:v3.12
+FROM python:3.12-slim
 
 # CIS Benchmark L2: run as non-root user.
-# Iron Bank python image provides the 'python' user — no useradd needed.
-USER python
+RUN groupadd --gid 1001 appuser \
+    && useradd --uid 1001 --gid appuser --shell /bin/bash --create-home appuser
 
-WORKDIR /home/python
+USER appuser
+
+WORKDIR /home/appuser/app
 
 # Ensure user-local bin (pip-installed scripts) is on PATH.
 # Required because we install as non-root into ~/.local/bin.
-ENV PATH="/home/python/.local/bin:${PATH}"
+ENV PATH="/home/appuser/.local/bin:${PATH}"
 
 # Copy package metadata AND source together so setuptools can resolve
 # [tool.setuptools.packages.find] where = ["src"] during the wheel build.
-COPY --chown=python:python pyproject.toml .
-COPY --chown=python:python src/ ./src/
+COPY --chown=appuser:appuser pyproject.toml .
+COPY --chown=appuser:appuser src/ ./src/
 
-# Upgrade pip then install the package with its [standard] extras.
-# pip installs to ~/.local because system site-packages is not writable
-# as a non-root user — this is expected and correct for Iron Bank images.
+# Upgrade pip then install the package runtime dependencies only (no dev tools).
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir ".[standard]"
+    && pip install --no-cache-dir .
 
 # Copy runtime assets needed by the application.
-COPY --chown=python:python base-template/ ./base-template/
+COPY --chown=appuser:appuser base-template/ ./base-template/
 
 # Create the generated-apps output directory owned by the runtime user.
 RUN mkdir -p generated-apps

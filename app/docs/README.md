@@ -28,28 +28,34 @@
 
 ### Starting the Application
 
+**Windows:**
 ```cmd
-cd C:\saabdemo\app
+cd C:\path\to\app
 start.bat
+```
+
+**Linux / macOS:**
+```bash
+cd /path/to/app
+./start.sh
 ```
 → Open `http://127.0.0.1:8000`
 
 ### Running Tests
 
-```cmd
-test.bat
-```
+**Windows:** `test.bat`  
+**Linux / macOS:** `./test.sh`
 
 ### Building the Container
 
-```cmd
+```bash
 podman build -t ai-app-generator:2.0 -f Containerfile .
 podman run -d --name ai-app-gen -p 127.0.0.1:8000:8000 --env-file .env ai-app-generator:2.0
 ```
 
 ### Health Check
 
-```cmd
+```bash
 curl http://127.0.0.1:8000/api/health
 ```
 
@@ -68,4 +74,4 @@ curl http://127.0.0.1:8000/api/health
 
 ---
 
-*All documents are maintained in `C:\saabdemo\app\docs\`*
+*All documents are maintained in `app/docs/`*
