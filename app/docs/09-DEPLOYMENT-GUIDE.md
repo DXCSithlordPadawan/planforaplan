@@ -1,9 +1,9 @@
 # AI Application Generator — Deployment Guide
 
-**Version:** 2.0  
+**Version:** 2.1  
 **Date:** March 2026  
 **Audience:** DevOps, System Administrators  
-**Platform:** Windows (primary); Linux/macOS (notes provided)
+**Platform:** Windows · Linux · macOS · Container (Podman/Docker)
 
 ---
 
@@ -78,41 +78,48 @@ Two virtual environments are required:
 After successful installation, the directory structure is:
 
 ```
-C:\saabdemo\app\
-├── .env                        ← Created from .env.example by operator
+app/
+├── .env                        ← Created from .env.example by setup script
 ├── .env.example                ← Template for environment variables
 ├── .gitignore
-├── .venv\                      ← Orchestrator virtualenv (created by setup.bat)
-│   └── Scripts\
-│       ├── uvicorn.exe
-│       ├── pytest.exe
+├── .venv/                      ← Orchestrator virtualenv (created by setup script)
+│   ├── Scripts/                ← Windows
+│   │   ├── uvicorn.exe
+│   │   ├── pytest.exe
+│   │   └── ...
+│   └── bin/                    ← Linux / macOS
+│       ├── uvicorn
+│       ├── pytest
 │       └── ...
-├── Containerfile               ← Podman build file
+├── Containerfile               ← OCI container build file (Podman / Docker)
 ├── pyproject.toml              ← Project metadata and dependencies
-├── setup.bat                   ← One-time setup script
-├── start.bat                   ← Start the orchestrator
-├── test.bat                    ← Run tests and security scans
-├── base-template\              ← Pre-installed generated app template
-│   ├── .venv\                  ← Generated app virtualenv
+├── setup.bat                   ← One-time setup script (Windows)
+├── setup.sh                    ← One-time setup script (Linux/macOS)
+├── start.bat                   ← Start the orchestrator (Windows)
+├── start.sh                    ← Start the orchestrator (Linux/macOS)
+├── test.bat                    ← Run tests and security scans (Windows)
+├── test.sh                     ← Run tests and security scans (Linux/macOS)
+├── base-template/              ← Pre-installed generated app template
+│   ├── .venv/                  ← Generated app virtualenv
 │   ├── main.py
 │   ├── requirements.txt
-│   └── templates\
+│   └── templates/
 │       └── index.html
-├── generated-apps\             ← Deployment output (created at runtime)
-│   └── latest\                 ← Most recent generated app
-├── src\
-│   └── app\
+├── generated-apps/             ← Deployment output (created at runtime)
+│   └── latest/                 ← Most recent generated app
+├── src/
+│   └── app/
 │       ├── main.py
 │       ├── config.py
 │       ├── state.py
 │       ├── prompts.py
-│       ├── models\
-│       ├── routes\
-│       ├── services\
-│       ├── templates\
-│       └── static\
-├── tests\
-└── docs\
+│       ├── models/
+│       ├── routes/
+│       ├── services/
+│       ├── templates/
+│       └── static/
+├── tests/
+└── docs/
 ```
 
 ---
@@ -138,34 +145,37 @@ Place the application directory at `C:\saabdemo\app\` (or any path without space
 ### Step 3 — Run Setup
 
 ```cmd
-cd C:\saabdemo\app
+cd C:\path\to\app
 setup.bat
 ```
 
-`setup.bat` performs four steps:
+`setup.bat` performs five steps:
 1. Creates `.venv\` using the system Python
 2. Upgrades pip inside `.venv\`
 3. Installs all dependencies from `pyproject.toml` (including dev tools)
 4. Creates `base-template\.venv\` and installs `base-template\requirements.txt`
+5. Creates `.env` from `.env.example` if `.env` does not already exist
 
 Expected output ends with:
 ```
 ============================================================
  Setup complete.
- Copy .env.example to .env and adjust as needed.
+ Edit .env to configure ports, paths, and log level.
  Run start.bat to launch the application.
 ============================================================
 ```
 
 If any step shows an error, see Section 12 (Troubleshooting).
 
-### Step 4 — Create the Environment File
+### Step 4 — Review the Environment File
+
+`setup.bat` creates `.env` automatically from `.env.example`. Review and edit it if needed:
 
 ```cmd
-copy .env.example .env
+notepad .env
 ```
 
-The defaults in `.env.example` work for a standard local deployment. Edit `.env` only if you need to change ports, paths, or log level.
+The defaults work for a standard local deployment. Edit `.env` only if you need to change ports, paths, or log level.
 
 ### Step 5 — Start the Application
 
@@ -198,35 +208,59 @@ Expected: `{"status":"ok"}`
 
 ## 5. Installation — Linux / macOS
 
-Replace the Windows-specific commands as follows:
+Shell scripts matching the Windows `.bat` files are provided for Linux and macOS.
+
+### Step 1 — Install Python 3.11+
+
+**Ubuntu / Debian:**
+```bash
+sudo apt update && sudo apt install python3 python3-pip python3-venv
+python3 --version
+```
+
+**macOS (Homebrew):**
+```bash
+brew install python@3.12
+python3 --version
+```
+
+### Step 2 — Copy Application Files
+
+Place the application directory at a path of your choice (e.g. `~/app`).
+
+### Step 3 — Run Setup
 
 ```bash
-# Navigate to app directory
-cd /path/to/saabdemo/app
-
-# Create orchestrator venv
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -e ".[dev]"
-
-# Create base template venv
-cd base-template
-python3.11 -m venv .venv
-source .venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-deactivate
-
-# Return to app root
-cd ..
-
-# Create env file
-cp .env.example .env
-
-# Start the orchestrator
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+cd /path/to/app
+chmod +x setup.sh start.sh test.sh
+./setup.sh
 ```
+
+`setup.sh` performs the same five steps as `setup.bat`:
+1. Creates `.venv/` using the system `python3`
+2. Upgrades pip inside `.venv/`
+3. Installs all dependencies from `pyproject.toml` (including dev tools)
+4. Creates `base-template/.venv/` and installs `base-template/requirements.txt`
+5. Creates `.env` from `.env.example` if `.env` does not already exist
+
+### Step 4 — Review the Environment File
+
+```bash
+nano .env   # or any editor
+```
+
+### Step 5 — Start the Application
+
+```bash
+./start.sh
+```
+
+### Step 6 — Verify
+
+```bash
+curl http://127.0.0.1:8000/api/health
+```
+Expected: `{"status":"ok"}`
 
 On Linux/macOS, the generated app's uvicorn executable will be at `base-template/.venv/bin/uvicorn`. The `_uvicorn_executable()` function in `process_service.py` handles the platform difference automatically.
 
@@ -234,14 +268,14 @@ On Linux/macOS, the generated app's uvicorn executable will be at `base-template
 
 ## 6. Environment Configuration
 
-Edit `C:\saabdemo\app\.env` to configure the deployment:
+Edit `.env` in the application directory to configure the deployment:
 
 ```env
 # Orchestrator bind settings
 APP_HOST=127.0.0.1
 APP_PORT=8000
 
-# Deployment paths (relative to working directory when start.bat is run)
+# Deployment paths (relative to working directory when the server starts)
 DEPLOY_DIR=generated-apps/latest
 BASE_TEMPLATE_DIR=base-template
 
@@ -256,13 +290,21 @@ LOG_LEVEL=INFO
 
 **`APP_HOST`** — Set to `127.0.0.1` for local-only access. Change to `0.0.0.0` only if a network-accessible deployment is needed (and only with authentication and HTTPS in place — see Section 11).
 
-**`DEPLOY_DIR`** and **`BASE_TEMPLATE_DIR`** — These are resolved relative to the working directory when the server starts. Use absolute paths if starting the server from a different directory:
-```env
-DEPLOY_DIR=C:/saabdemo/app/generated-apps/latest
-BASE_TEMPLATE_DIR=C:/saabdemo/app/base-template
-```
+**`DEPLOY_DIR`** and **`BASE_TEMPLATE_DIR`** — These are resolved relative to the working directory when the server starts. Use absolute paths if starting the server from a different directory.
 
-Note: Use forward slashes `/` in paths even on Windows — Python's `pathlib` handles both.
+> **Windows:** Use forward slashes `/` or doubled backslashes `\\` in paths — Python's `pathlib` handles both.
+>
+> **Linux/macOS:** Use standard Unix paths.
+
+```env
+# Windows absolute path example
+DEPLOY_DIR=C:/path/to/app/generated-apps/latest
+BASE_TEMPLATE_DIR=C:/path/to/app/base-template
+
+# Linux/macOS absolute path example
+DEPLOY_DIR=/home/user/app/generated-apps/latest
+BASE_TEMPLATE_DIR=/home/user/app/base-template
+```
 
 **`LOG_LEVEL`** — Use `DEBUG` only for troubleshooting. Debug logging is verbose and may capture request details.
 
@@ -270,13 +312,19 @@ Note: Use forward slashes `/` in paths even on Windows — Python's `pathlib` ha
 
 ## 7. Running in Development Mode
 
-Development mode enables auto-reload on code changes:
+Development mode enables auto-reload on code changes.
 
+**Windows:**
 ```cmd
 .venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-This is equivalent to what `start.bat` runs. Changes to `src/app/` files will restart the server automatically.
+**Linux / macOS:**
+```bash
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+This is equivalent to what `start.bat` / `start.sh` runs. Changes to `src/app/` files will restart the server automatically.
 
 **Note:** Auto-reload does not restart the generated app subprocess or affect in-memory state (which is reset on server restart).
 
@@ -284,10 +332,16 @@ This is equivalent to what `start.bat` runs. Changes to `src/app/` files will re
 
 ## 8. Running in Production Mode
 
-For a stable production deployment (no auto-reload, multiple workers not applicable for this use case):
+For a stable production deployment (no auto-reload):
 
+**Windows:**
 ```cmd
 .venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --workers 1
+```
+
+**Linux / macOS:**
+```bash
+.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 **Single worker only:** The application uses module-level in-memory state (`state.py`). Multiple workers would not share state and would cause inconsistent behaviour. Always use `--workers 1`.
@@ -297,15 +351,15 @@ For a stable production deployment (no auto-reload, multiple workers not applica
 Use NSSM (Non-Sucking Service Manager) or Windows Task Scheduler to start `start.bat` at login:
 
 ```cmd
-REM Using Task Scheduler (run as administrator)
-schtasks /create /tn "AI App Generator" /tr "C:\saabdemo\app\start.bat" /sc onlogon /ru SYSTEM
+REM Using Task Scheduler (run as administrator) — adjust the path to your app directory
+schtasks /create /tn "AI App Generator" /tr "C:\path\to\app\start.bat" /sc onlogon /ru SYSTEM
 ```
 
 For a proper Windows Service installation, NSSM is recommended:
 ```cmd
-nssm install AIAppGenerator "C:\saabdemo\app\.venv\Scripts\uvicorn.exe"
+nssm install AIAppGenerator "C:\path\to\app\.venv\Scripts\uvicorn.exe"
 nssm set AIAppGenerator AppParameters "app.main:app --host 127.0.0.1 --port 8000"
-nssm set AIAppGenerator AppDirectory "C:\saabdemo\app"
+nssm set AIAppGenerator AppDirectory "C:\path\to\app"
 nssm start AIAppGenerator
 ```
 
@@ -315,6 +369,7 @@ nssm start AIAppGenerator
 
 Run this verification sequence after any deployment:
 
+**Windows:**
 ```cmd
 REM 1. Health endpoint
 curl http://127.0.0.1:8000/api/health
@@ -324,13 +379,21 @@ REM 2. Status endpoint
 curl http://127.0.0.1:8000/api/status
 REM Expected: {"phase":"idle","progress":0,"message":"Ready","url":null}
 
-REM 3. Index page
-curl -I http://127.0.0.1:8000/
-REM Expected: HTTP/1.1 200 OK with security headers present
-
-REM 4. Security headers present
+REM 3. Security headers present
 curl -I http://127.0.0.1:8000/ | findstr "X-Frame-Options X-Content-Type Content-Security"
-REM Expected: all three headers appear in output
+```
+
+**Linux / macOS:**
+```bash
+# 1. Health endpoint
+curl http://127.0.0.1:8000/api/health
+# Expected: {"status":"ok"}
+
+# 2. Status endpoint
+curl http://127.0.0.1:8000/api/status
+
+# 3. Security headers present
+curl -sI http://127.0.0.1:8000/ | grep -i "x-frame-options\|x-content-type\|content-security"
 ```
 
 ---
@@ -340,28 +403,41 @@ REM Expected: all three headers appear in output
 ### Minor Update (code changes only, no dependency changes)
 
 1. Stop the server (Ctrl+C).
-2. Replace the modified files in `src\app\`.
-3. Start the server with `start.bat`.
+2. Replace the modified files in `src/app/`.
+3. Start the server with `start.bat` (Windows) or `./start.sh` (Linux/macOS).
 
 ### Dependency Update
 
 1. Stop the server.
 2. Edit `pyproject.toml` with new version constraints.
-3. Run:
+3. Reinstall:
+
+   **Windows:**
    ```cmd
    .venv\Scripts\pip.exe install -e ".[dev]"
    ```
+   **Linux / macOS:**
+   ```bash
+   .venv/bin/pip install -e ".[dev]"
+   ```
 4. Rebuild base template venv (see Maintenance Guide Section 5).
-5. Run `test.bat` — all tests must pass.
+5. Run `test.bat` / `./test.sh` — all tests must pass.
 6. Start the server.
 
 ### Full Reinstall
 
+**Windows:**
 ```cmd
 REM Stop the server first
 rmdir /s /q .venv
 rmdir /s /q base-template\.venv
 setup.bat
+```
+
+**Linux / macOS:**
+```bash
+rm -rf .venv base-template/.venv
+./setup.sh
 ```
 
 ---
@@ -407,45 +483,66 @@ server {
 
 ## 12. Troubleshooting Deployments
 
-### `setup.bat` fails at step 3 with "pip install error"
+### `setup.bat` / `setup.sh` fails at dependency install step
 
 - Check internet connectivity.
 - Check if a corporate proxy is blocking pip: set `HTTP_PROXY` and `HTTPS_PROXY` environment variables.
-- Try: `.venv\Scripts\pip.exe install --upgrade pip` then retry step 3.
+- Manually upgrade pip and retry:
 
-### `start.bat` shows `ModuleNotFoundError: No module named 'app'`
+  **Windows:** `.venv\Scripts\pip.exe install --upgrade pip`  
+  **Linux/macOS:** `.venv/bin/pip install --upgrade pip`
 
-The server is not finding the `src/app` package. This means `pyproject.toml` `setuptools.packages.find` is not working correctly.
+### `ModuleNotFoundError: No module named 'app'`
 
-Fix: Run from the correct directory and ensure `pyproject.toml` is present:
+The server cannot find the `src/app` package. Ensure you are running the start script from the app directory and that the package is installed:
+
+**Windows:**
 ```cmd
-cd C:\saabdemo\app
+cd C:\path\to\app
 .venv\Scripts\pip.exe install -e .
 start.bat
 ```
 
-### Server starts but shows `WARNING: .env file not found`
-
-The `.env` file is missing. Create it:
-```cmd
-copy .env.example .env
+**Linux / macOS:**
+```bash
+cd /path/to/app
+.venv/bin/pip install -e .
+./start.sh
 ```
+
+### Server starts but `.env` not found
+
+Run `setup.bat` or `setup.sh` — it creates `.env` automatically. Or create it manually:
+
+**Windows:** `copy .env.example .env`  
+**Linux/macOS:** `cp .env.example .env`
 
 ### Port 8000 is already in use
 
-Change `APP_PORT` in `.env` to an unused port (e.g., 8080) and update `start.bat` accordingly.
+Change `APP_PORT` in `.env` to an unused port (e.g., 8080).
 
 ### Generated apps fail to start with `No module named 'fastapi'`
 
 The `base-template/.venv/` is missing or broken. Rebuild it:
+
+**Windows:**
 ```cmd
-cd C:\saabdemo\app\base-template
+cd base-template
 rmdir /s /q .venv
 python -m venv .venv
 .venv\Scripts\pip.exe install -r requirements.txt
 cd ..
 ```
 
+**Linux / macOS:**
+```bash
+cd base-template
+rm -rf .venv
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+cd ..
+```
+
 ---
 
-*Document maintained at `C:\saabdemo\app\docs\09-DEPLOYMENT-GUIDE.md`*
+*Document maintained at `app/docs/09-DEPLOYMENT-GUIDE.md`*

@@ -110,9 +110,9 @@ def create_app() -> FastAPI:
     async def index(request: Request) -> HTMLResponse:
         """Serve the single-page HTML interface."""
         return templates.TemplateResponse(
+            request,
             "index.html",
             {
-                "request": request,
                 "app_port": settings.app_port,
                 "generated_app_port": settings.generated_app_port,
             },
