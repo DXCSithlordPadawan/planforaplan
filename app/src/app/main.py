@@ -56,7 +56,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "script-src 'self' https://cdn.tailwindcss.com 'unsafe-inline'; "
             "style-src 'self' https://fonts.googleapis.com 'unsafe-inline'; "
             "font-src https://fonts.gstatic.com; "
-            "connect-src 'self' ws://127.0.0.1:8000 ws://localhost:8000;"
+            f"connect-src 'self' "
+            f"ws://{settings.app_host}:{settings.app_port} "
+            f"ws://localhost:{settings.app_port};"
         )
         return response
 
@@ -85,12 +87,19 @@ def create_app() -> FastAPI:
 
     # --- Middleware -----------------------------------------------------------
     app.add_middleware(SecurityHeadersMiddleware)
+    # Build CORS allowed origins from configured host/port.
+    # 0.0.0.0 is a bind address (all interfaces), not a valid browser origin;
+    # skip it so browsers can still issue same-origin requests when the server
+    # is accessed via localhost or a real hostname behind a reverse proxy.
+    _cors_origins = {
+        f"http://localhost:{settings.app_port}",
+        f"http://127.0.0.1:{settings.app_port}",
+    }
+    if settings.app_host not in ("0.0.0.0", ""):
+        _cors_origins.add(f"http://{settings.app_host}:{settings.app_port}")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            f"http://127.0.0.1:{settings.app_port}",
-            f"http://localhost:{settings.app_port}",
-        ],
+        allow_origins=list(_cors_origins),
         allow_methods=["GET", "POST"],
         allow_headers=["*"],
     )

@@ -337,6 +337,10 @@ Edit `.env` in the application directory to configure the deployment:
 
 ```env
 # Orchestrator bind settings
+# APP_HOST — IP address the server listens on.
+#   127.0.0.1  → local machine only (default, recommended for single-user use)
+#   0.0.0.0    → all network interfaces (use only with a reverse proxy + HTTPS)
+# APP_PORT — TCP port the server binds to. Change if 8000 is in use.
 APP_HOST=127.0.0.1
 APP_PORT=8000
 
@@ -354,6 +358,8 @@ LOG_LEVEL=INFO
 ### Configuration Notes
 
 **`APP_HOST`** — Set to `127.0.0.1` for local-only access. Change to `0.0.0.0` only if a network-accessible deployment is needed (and only with authentication and HTTPS in place — see Section 12).
+
+**`APP_PORT`** — Set to any unused port. The start scripts (`start.sh`, `start.ps1`, `start.bat`) read this value from `.env` at launch time and pass it to uvicorn automatically. You do not need to edit the scripts. The application will be accessible at `http://<APP_HOST>:<APP_PORT>` once started.
 
 **`DEPLOY_DIR`** and **`BASE_TEMPLATE_DIR`** — These are resolved relative to the working directory when the server starts. Use absolute paths if starting the server from a different directory.
 
@@ -377,7 +383,7 @@ BASE_TEMPLATE_DIR=/home/user/app/base-template
 
 ## 8. Running in Development Mode
 
-Development mode enables auto-reload on code changes.
+Development mode enables auto-reload on code changes. The host and port are read from `.env` by the start scripts; the manual commands below use the defaults — substitute your configured values if different.
 
 **Windows (PowerShell):**
 ```powershell
@@ -394,7 +400,7 @@ Development mode enables auto-reload on code changes.
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-This is equivalent to what `start.ps1` / `start.bat` / `start.sh` runs. Changes to `src/app/` files will restart the server automatically.
+The `start.ps1` / `start.bat` / `start.sh` scripts read `APP_HOST` and `APP_PORT` from `.env` and pass them to uvicorn automatically — they are the recommended way to start the server. Changes to `src/app/` files will restart the server automatically.
 
 **Note:** Auto-reload does not restart the generated app subprocess or affect in-memory state (which is reset on server restart).
 
