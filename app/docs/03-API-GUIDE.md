@@ -87,8 +87,8 @@ Pydantic validation errors (HTTP 422) return the standard FastAPI format:
     {
       "type": "string_pattern_mismatch",
       "loc": ["body", "provider"],
-      "msg": "String should match pattern '^(claude|minimax)$'",
-      "input": "openai"
+      "msg": "String should match pattern '^[A-Za-z0-9_-]+$'",
+      "input": "my provider!"
     }
   ]
 }
@@ -125,13 +125,35 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
-| `provider` | string | Yes | `^(claude\|minimax)$` | AI provider name |
+| `provider` | string | Yes | `^[A-Za-z0-9_-]+$`, 1–64 chars | AI provider name |
 | `api_key` | string | Yes | 10–512 characters | Provider API key |
+| `base_url` | string | Conditional | Valid `http://` or `https://` URL | Required for custom providers |
+| `model` | string | Conditional | 1–256 characters | Required for custom providers |
 
+**Built-in provider names** (case-insensitive):
+
+| Value | Provider |
+|-------|---------|
+| `claude` | Anthropic Claude (claude-sonnet-4-20250514) |
+| `minimax` | Minimax (abab6.5s-chat) |
+| `gemini` | Google Gemini (gemini-1.5-pro) |
+| _(any other)_ | Custom OpenAI-compatible — requires `base_url` and `model` |
+
+**Example — built-in provider:**
 ```json
 {
-  "provider": "claude",
-  "api_key": "sk-ant-api03-..."
+  "provider": "gemini",
+  "api_key": "AIzaSy..."
+}
+```
+
+**Example — custom OpenAI-compatible provider:**
+```json
+{
+  "provider": "my-llm",
+  "api_key": "my-api-key",
+  "base_url": "https://api.example.com/v1",
+  "model": "my-model-name"
 }
 ```
 
@@ -149,14 +171,14 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 }
 ```
 
-**Response 422 — Validation error:**
+**Response 422 — Validation error (unknown provider without base_url/model):**
 ```json
 {
   "detail": [
     {
-      "type": "string_pattern_mismatch",
-      "loc": ["body", "provider"],
-      "msg": "String should match pattern '^(claude|minimax)$'"
+      "type": "value_error",
+      "loc": ["body"],
+      "msg": "'base_url' is required for custom provider 'my-llm'"
     }
   ]
 }
@@ -165,6 +187,7 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 **Notes:**
 - The probe call sends "Hello" with system prompt "Reply with the single word: ok". This consumes a minimal number of tokens.
 - The API key is never returned in any response.
+- All outbound HTTPS connections use the **certifi** CA bundle to avoid `SSL: CERTIFICATE_VERIFY_FAILED` errors on systems with incomplete trust stores.
 - Calling this endpoint again with a new provider or key replaces the stored provider.
 
 ---
