@@ -164,6 +164,33 @@ To build this system, follow the implementation phases outlined in `plan_for_a_p
 4. **Phase 4:** Develop the Jinja2 frontend with all four workflow views and WebSocket log streaming
 5. **Phase 5:** Conduct comprehensive testing, security scanning with `bandit` and `pip-audit`, and performance optimisation
 
+### Quick Start — Local Machine Deployment
+
+The application runs directly on your local machine. No container runtime is required for standard use.
+
+**Windows (PowerShell — recommended):**
+```powershell
+cd app
+.\setup.ps1          # One-time setup: creates virtual environments and .env
+.\start.ps1          # Start the orchestrator at http://127.0.0.1:8000
+```
+
+**Windows (Command Prompt):**
+```cmd
+cd app
+setup.bat
+start.bat
+```
+
+**Linux / macOS:**
+```bash
+cd app
+./setup.sh
+./start.sh
+```
+
+Open `http://127.0.0.1:8000` in your browser once the server is running. See `app/docs/09-DEPLOYMENT-GUIDE.md` for full deployment instructions.
+
 ---
 
 ## Container Build (Podman)
@@ -186,6 +213,7 @@ podman run -p 8000:8000 --env-file .env ai-app-generator:2.0
 |---------|------|-------------|
 | 1.0 | March 6, 2026 | Initial documentation release (Node.js stack) |
 | 2.0 | March 6, 2026 | Full refactor to Python / FastAPI stack; FIPS 140-3 compliance added |
+| 2.1 | March 2026 | PowerShell scripts added for Windows local machine deployment (`setup.ps1`, `start.ps1`, `test.ps1`); Deployment Guide updated to v2.2 |
 
 ---
 
