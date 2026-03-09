@@ -43,6 +43,29 @@ class TestCreateProviderFactory:
         provider = create_provider("gemini", "AIzaSy-test-key-1234567")
         assert isinstance(provider, GeminiProvider)
 
+    def test_creates_gemini_provider_with_custom_model(self) -> None:
+        provider = create_provider("gemini", "AIzaSy-test-key-1234567", model="gemini-1.5-flash")
+        assert isinstance(provider, GeminiProvider)
+        assert provider._model == "gemini-1.5-flash"
+
+    def test_creates_gemini_provider_with_custom_base_url(self) -> None:
+        provider = create_provider(
+            "gemini",
+            "AIzaSy-test-key-1234567",
+            base_url="https://generativelanguage.googleapis.com/v1/models",
+        )
+        assert isinstance(provider, GeminiProvider)
+        assert provider._api_base == "https://generativelanguage.googleapis.com/v1/models"
+
+    def test_gemini_provider_defaults(self) -> None:
+        provider = GeminiProvider("AIzaSy-test-key-1234567")
+        assert provider._model == GeminiProvider.MODEL
+        assert provider._api_base == GeminiProvider.API_BASE
+
+    def test_gemini_default_model_is_current(self) -> None:
+        """Default model must not be the deprecated gemini-1.5-pro."""
+        assert GeminiProvider.MODEL != "gemini-1.5-pro"
+
     def test_creates_custom_provider(self) -> None:
         provider = create_provider(
             "my-llm",

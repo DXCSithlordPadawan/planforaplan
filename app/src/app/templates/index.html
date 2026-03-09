@@ -120,6 +120,19 @@
               class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-50 text-sm focus:outline-none focus:border-blue-500 font-mono" />
           </div>
         </div>
+        <!-- Extra fields shown only for Gemini (optional overrides) -->
+        <div id="gemini-provider-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Model <span class="text-slate-500">(optional)</span></label>
+            <input id="gemini-model" type="text" placeholder="gemini-2.0-flash"
+              class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-50 text-sm focus:outline-none focus:border-blue-500 font-mono" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-400 mb-1">Endpoint Base URL <span class="text-slate-500">(optional)</span></label>
+            <input id="gemini-base-url" type="text" placeholder="https://generativelanguage.googleapis.com/v1beta/models"
+              class="w-full bg-slate-900 border border-slate-600 rounded px-3 py-2 text-slate-50 text-sm focus:outline-none focus:border-blue-500 font-mono" />
+          </div>
+        </div>
         <!-- Extra fields shown only for custom providers -->
         <div id="custom-provider-fields" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
           <div>
@@ -303,11 +316,21 @@
     // ---------------------------------------------------------------------------
     function onProviderChange() {
       const provider = document.getElementById('provider').value;
+      const geminiFields = document.getElementById('gemini-provider-fields');
       const customFields = document.getElementById('custom-provider-fields');
-      if (provider === 'custom') {
+      if (provider === 'gemini') {
+        geminiFields.classList.remove('hidden');
+        geminiFields.classList.add('grid');
+        customFields.classList.add('hidden');
+        customFields.classList.remove('grid');
+      } else if (provider === 'custom') {
+        geminiFields.classList.add('hidden');
+        geminiFields.classList.remove('grid');
         customFields.classList.remove('hidden');
         customFields.classList.add('grid');
       } else {
+        geminiFields.classList.add('hidden');
+        geminiFields.classList.remove('grid');
         customFields.classList.add('hidden');
         customFields.classList.remove('grid');
       }
@@ -325,6 +348,13 @@
       }
 
       const body = { provider, api_key: apiKey };
+
+      if (provider === 'gemini') {
+        const geminiModel = document.getElementById('gemini-model').value.trim();
+        const geminiBaseUrl = document.getElementById('gemini-base-url').value.trim();
+        if (geminiModel) body.model = geminiModel;
+        if (geminiBaseUrl) body.base_url = geminiBaseUrl;
+      }
 
       if (provider === 'custom') {
         const baseUrl = document.getElementById('custom-base-url').value.trim();
@@ -354,6 +384,8 @@
         } else {
           const label = provider === 'custom'
             ? `${body.model} @ ${body.base_url}`
+            : provider === 'gemini' && body.model
+            ? `gemini (${body.model})`
             : provider;
           statusEl.textContent = `✓ ${label} configured`;
           statusEl.className = 'text-xs text-green-400';
