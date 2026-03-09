@@ -191,6 +191,18 @@ cd app
 
 Open `http://127.0.0.1:8000` in your browser once the server is running. See `app/docs/09-DEPLOYMENT-GUIDE.md` for full deployment instructions.
 
+#### Changing the Endpoint URL
+
+The server host and port are controlled by `APP_HOST` and `APP_PORT` in `app/.env`. Edit that file before starting the server:
+
+```env
+# Bind to all interfaces on port 9000
+APP_HOST=0.0.0.0
+APP_PORT=9000
+```
+
+The start scripts (`start.sh`, `start.ps1`, `start.bat`) read these values automatically, so the application will be accessible at `http://<APP_HOST>:<APP_PORT>`. See `app/docs/09-DEPLOYMENT-GUIDE.md` Section 7 for full configuration details.
+
 ---
 
 ## Container Build (Podman)

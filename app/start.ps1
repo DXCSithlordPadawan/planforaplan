@@ -15,8 +15,18 @@ if (-not (Test-Path ".env")) {
     Copy-Item ".env.example" ".env"
 }
 
-Write-Host "Starting AI Application Generator on http://127.0.0.1:8000"
+# Read APP_HOST and APP_PORT from .env (fall back to safe defaults)
+$appHost = "127.0.0.1"
+$appPort = "8000"
+if (Test-Path ".env") {
+    foreach ($line in (Get-Content ".env")) {
+        if ($line -match "^APP_HOST=(.+)") { $appHost = $matches[1].Trim() }
+        if ($line -match "^APP_PORT=(.+)") { $appPort = $matches[1].Trim() }
+    }
+}
+
+Write-Host "Starting AI Application Generator on http://${appHost}:${appPort}"
 Write-Host "Press Ctrl+C to stop."
 Write-Host ""
 
-& .\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --reload
+& .\.venv\Scripts\uvicorn.exe app.main:app --host $appHost --port $appPort --reload

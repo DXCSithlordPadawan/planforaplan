@@ -14,8 +14,14 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
 fi
 
-echo "Starting AI Application Generator on http://127.0.0.1:8000"
+# Read APP_HOST and APP_PORT from .env (fall back to safe defaults)
+APP_HOST=$(grep -E "^APP_HOST=" .env 2>/dev/null | cut -d= -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
+APP_PORT=$(grep -E "^APP_PORT=" .env 2>/dev/null | cut -d= -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' || true)
+APP_HOST="${APP_HOST:-127.0.0.1}"
+APP_PORT="${APP_PORT:-8000}"
+
+echo "Starting AI Application Generator on http://${APP_HOST}:${APP_PORT}"
 echo "Press Ctrl+C to stop."
 echo ""
 
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+.venv/bin/uvicorn app.main:app --host "${APP_HOST}" --port "${APP_PORT}" --reload
