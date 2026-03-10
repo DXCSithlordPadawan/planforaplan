@@ -141,8 +141,8 @@ class ClaudeProvider:
 class MinimaxProvider:
     """Minimax AI provider using async httpx HTTP client."""
 
-    API_URL = "https://api.minimax.chat/v1/text/chatcompletion_v2"
-    MODEL = "abab6.5s-chat"
+    API_URL = "https://api.minimax.chat/v1/chat/completions"
+    MODEL = "MiniMax-Text-01"
 
     def __init__(
         self,
@@ -177,7 +177,18 @@ class MinimaxProvider:
                 )
                 response.raise_for_status()
                 data = response.json()
-                return data["choices"][0]["message"]["content"]
+                # Minimax returns API-level errors in base_resp even on HTTP 200.
+                base_resp = data.get("base_resp", {})
+                if base_resp.get("status_code", 0) != 0:
+                    raise AIProviderError(
+                        f"Minimax API error: {base_resp.get('status_msg', 'unknown error')}"
+                    )
+                try:
+                    return data["choices"][0]["message"]["content"]
+                except (KeyError, IndexError) as exc:
+                    raise AIProviderError(
+                        f"Unexpected Minimax response format: {data}"
+                    ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             if status == 401:

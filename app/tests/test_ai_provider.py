@@ -82,6 +82,14 @@ class TestCreateProviderFactory:
         assert provider._model == MinimaxProvider.MODEL
         assert provider._api_url == MinimaxProvider.API_URL
 
+    def test_minimax_default_model_is_current(self) -> None:
+        """Default model must not be the legacy abab6.5s-chat."""
+        assert MinimaxProvider.MODEL != "abab6.5s-chat"
+
+    def test_minimax_default_url_is_openai_compatible(self) -> None:
+        """Default API URL must use the OpenAI-compatible chat/completions endpoint."""
+        assert MinimaxProvider.API_URL == "https://api.minimax.chat/v1/chat/completions"
+
     def test_creates_gemini_provider(self) -> None:
         provider = create_provider("gemini", "AIzaSy-test-key-1234567")
         assert isinstance(provider, GeminiProvider)
@@ -249,6 +257,75 @@ class TestMinimaxProviderRateLimit:
         mock_client.post = AsyncMock(side_effect=mock_exc)
         with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(AIRateLimitError, match="rate limit exceeded"):
+                await provider.generate("hi", "sys")
+
+
+class TestMinimaxProviderBaseResp:
+    @pytest.mark.asyncio
+    async def test_raises_ai_provider_error_on_base_resp_error(self) -> None:
+        """MinimaxProvider must raise AIProviderError when base_resp.status_code != 0."""
+        provider = MinimaxProvider("minimax-test-key-1234")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={
+            "base_resp": {"status_code": 2013, "status_msg": "groupId is empty"}
+        })
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(AIProviderError, match="Minimax API error: groupId is empty"):
+                await provider.generate("hi", "sys")
+
+    @pytest.mark.asyncio
+    async def test_success_when_base_resp_status_code_is_zero(self) -> None:
+        """MinimaxProvider must succeed when base_resp.status_code == 0."""
+        provider = MinimaxProvider("minimax-test-key-1234")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={
+            "choices": [{"message": {"content": "ok"}}],
+            "base_resp": {"status_code": 0, "status_msg": "success"},
+        })
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await provider.generate("hi", "sys")
+        assert result == "ok"
+
+    @pytest.mark.asyncio
+    async def test_success_when_no_base_resp_field(self) -> None:
+        """MinimaxProvider must succeed for responses without a base_resp field."""
+        provider = MinimaxProvider("minimax-test-key-1234")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={
+            "choices": [{"message": {"content": "hello"}}],
+        })
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            result = await provider.generate("hi", "sys")
+        assert result == "hello"
+
+    @pytest.mark.asyncio
+    async def test_raises_ai_provider_error_on_missing_choices(self) -> None:
+        """MinimaxProvider must raise AIProviderError when choices is absent."""
+        provider = MinimaxProvider("minimax-test-key-1234")
+        mock_response = MagicMock()
+        mock_response.raise_for_status = MagicMock()
+        mock_response.json = MagicMock(return_value={"unexpected": "data"})
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(AIProviderError, match="Unexpected Minimax response format"):
                 await provider.generate("hi", "sys")
 
 
