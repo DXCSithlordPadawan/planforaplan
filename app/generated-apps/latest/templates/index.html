@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block title %}Nine Men's Morris - Home{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
+    <!-- Hero Section -->
+    <div class="text-center mb-16">
+        <h1 class="text-4xl md:text-6xl font-bold text-white mb-6">
+            Nine Men's Morris
+        </h1>
+        <p class="text-xl text-gray-300 mb-8 max-w-3xl mx-auto">
+            Experience the ancient strategy game with a modern, clean dark interface. 
+            Plan your moves, form mills, and capture your opponent's pieces in this 
+            timeless battle of wits.
+        </p>
+        <div class="space-x-4">
+            <a href="/game" class="bg-accent hover:bg-blue-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors inline-block">
+                Start Playing
+            </a>
+            <a href="/user-stories" class="border border-gray-600 hover:border-gray-400 text-gray-300 hover:text-white px-8 py-3 rounded-lg font-semibold transition-colors inline-block">
+                View User Stories
+            </a>
+        </div>
+    </div>
+
+    <!-- Game Overview -->
+    <div class="grid md:grid-cols-2 gap-12 mb-16">
+        <div>
+            <h2 class="text-3xl font-bold text-white mb-6">Game Overview</h2>
+            <div class="space-y-4 text-gray-300">
+                <p>
+                    Nine Men's Morris is an ancient strategy board game that dates back over 3,000 years. 
+                    Two players compete to form "mills" (three pieces in a row) while trying to capture 
+                    their opponent's pieces.
+                </p>
+                <p>
+                    The game consists of three distinct phases: placement, movement, and flying. Each phase 
+                    requires different strategies and tactical thinking.
+                </p>
+            </div>
+        </div>
+        <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+            <h3 class="text-xl font-semibold text-white mb-4">Game Features</h3>
+            <ul class="space-y-2 text-gray-300">
+                <li class="flex items-center">
+                    <span class="w-2 h-2 bg-accent rounded-full mr-3"></span>
+                    Clean, modern dark theme interface
+                </li>
+                <li class="flex items-center">
+                    <span class="w-2 h-2 bg-accent rounded-full mr-3"></span>
+                    Real-time game state updates
+                </li>
+                <li class="flex items-center">
+                    <span class="w-2 h-2 bg-accent rounded-full mr-3"></span>
+                    Visual feedback for valid moves
+                </li>
+                <li class="flex items-center">
+                    <span class="w-2 h-2 bg-accent rounded-full mr-3"></span>
+                    Automatic win condition detection
+                </li>
+                <li class="flex items-center">
+                    <span class="w-2 h-2 bg-accent rounded-full mr-3"></span>
+                    Responsive design for all devices
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Game Rules Summary -->
+    <div class="bg-dark-card rounded-lg p-8 border border-dark-border mb-16">
+        <h2 class="text-3xl font-bold text-white mb-8 text-center">How to Play</h2>
+        <div class="grid md:grid-cols-3 gap-8">
+            <div class="text-center">
+                <div class="bg-accent rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-white">1</span>
+                </div>
+                <h3 class="text-xl font-semibold text-white mb-3">Placement Phase</h3>
+                <p class="text-gray-300">
+                    Players take turns placing their 9 pieces on empty intersections of the board, 
+                    trying to form mills while blocking the opponent.
+                </p>
+            </div>
+            <div class="text-center">
+                <div class="bg-accent rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-white">2</span>
+                </div>
+                <h3 class="text-xl font-semibold text-white mb-3">Movement Phase</h3>
+                <p class="text-gray-300">
+                    After all pieces are placed, players move pieces to adjacent positions 
+                    to form mills and capture opponent pieces.
+                </p>
+            </div>
+            <div class="text-center">
+                <div class="bg-accent rounded-full w-16 h-16 flex items-center justify-center mx-auto mb-4">
+                    <span class="text-2xl font-bold text-white">3</span>
+                </div>
+                <h3 class="text-xl font-semibold text-white mb-3">Flying Phase</h3>
+                <p class="text-gray-300">
+                    When a player has only 3 pieces left, they can move to any empty position 
+                    on the board, giving them increased mobility.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Development Information -->
+    <div class="text-center">
+        <h2 class="text-3xl font-bold text-white mb-6">Development Progress</h2>
+        <p class="text-gray-300 mb-6 max-w-2xl mx-auto">
+            This Nine Men's Morris implementation was built using modern web technologies 
+            with a focus on clean code, user experience, and comprehensive user story documentation.
+        </p>
+        <div class="grid md:grid-cols-3 gap-6">
+            <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                <h3 class="text-lg font-semibold text-white mb-2">Technology Stack</h3>
+                <p class="text-gray-300 text-sm">Python 3.13, FastAPI, Tailwind CSS, JavaScript</p>
+            </div>
+            <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                <h3 class="text-lg font-semibold text-white mb-2">Total User Stories</h3>
+                <p class="text-gray-300 text-sm">15 comprehensive user stories covering all features</p>
+            </div>
+            <div class="bg-dark-card rounded-lg p-6 border border-dark-border">
+                <h3 class="text-lg font-semibold text-white mb-2">Development Approach</h3>
+                <p class="text-gray-300 text-sm">Agile methodology with clear acceptance criteria</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

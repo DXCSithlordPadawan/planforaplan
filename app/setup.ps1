@@ -7,9 +7,26 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
 Write-Host "[1/5] Creating virtual environment..."
-python -m venv .venv
+# Resolve Python: prefer py launcher (works even when App Execution Aliases
+# block the bare 'python' / 'python3.13' commands on Windows 10/11).
+$pythonExe = $null
+foreach ($candidate in @("py", "python3.13", "python3", "python")) {
+    try {
+        $ver = & $candidate --version 2>&1
+        if ($LASTEXITCODE -eq 0 -and $ver -match "Python 3\.([0-9]+)" -and [int]$Matches[1] -ge 11) {
+            $pythonExe = $candidate
+            Write-Host "  Using Python: $ver ($candidate)"
+            break
+        }
+    } catch { }
+}
+if (-not $pythonExe) {
+    Write-Error "ERROR: Python 3.11+ not found. Install from python.org or the Microsoft Store, then disable App Execution Aliases for 'python.exe' in Settings > Apps > Advanced app settings > App execution aliases."
+    exit 1
+}
+& $pythonExe -m venv .venv
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "ERROR: Failed to create venv. Ensure Python 3.11+ is installed."
+    Write-Error "ERROR: Failed to create venv."
     exit 1
 }
 
@@ -23,12 +40,16 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "[4/5] Setting up base template virtual environment..."
-Push-Location base-template
-python -m venv .venv
-& .\.venv\Scripts\pip.exe install --upgrade pip
-& .\.venv\Scripts\pip.exe install -r requirements.txt
-Pop-Location
+Write-Host "[4/5] Pre-installing base template dependencies..."
+# The generated app runs inside the planforaplan host venv (no separate venv
+# is created per deployment). Pre-installing the base requirements here means
+# the first deployment has everything it needs without a pip call at runtime.
+& .\.venv\Scripts\pip.exe install --quiet -r base-template\requirements.txt
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "ERROR: Failed to install base template dependencies."
+    exit 1
+}
+Write-Host "  Base template dependencies installed into host venv."
 
 Write-Host "[5/5] Creating default .env file..."
 if (-not (Test-Path ".env")) {

@@ -115,13 +115,28 @@ class ClaudeProvider:
 
     async def generate(self, user_prompt: str, system_prompt: str) -> str:
         """Call the Claude Messages API and return the response text."""
+        # Build kwargs conditionally: the Anthropic SDK rejects an empty string
+        # for the system parameter on some versions, causing a silent hang.
+        create_kwargs: dict[str, object] = {
+            "model": self._model,
+            "max_tokens": 8192,
+            "messages": [{"role": "user", "content": user_prompt}],
+        }
+        if system_prompt:
+            create_kwargs["system"] = system_prompt
+
         try:
-            message = await self._client.messages.create(
-                model=self._model,
-                max_tokens=8192,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
-            )
+            message = await self._client.messages.create(**create_kwargs)
+            # Guard: an empty content list would cause an unhandled IndexError.
+            if not message.content:
+                stop_reason = getattr(message, "stop_reason", "unknown")
+                logger.warning(
+                    "Claude returned empty content list. stop_reason=%s", stop_reason
+                )
+                raise AIProviderError(
+                    f"Claude returned no content (stop_reason: {stop_reason!r}). "
+                    "The response may have been blocked or truncated. Please retry."
+                )
             return message.content[0].text
         except anthropic.AuthenticationError as exc:
             raise AIProviderError("Invalid Claude API key.") from exc
@@ -139,9 +154,17 @@ class ClaudeProvider:
 
 
 class MinimaxProvider:
-    """Minimax AI provider using async httpx HTTP client."""
+    """Minimax AI provider using async httpx HTTP client.
 
-    API_URL = "https://api.minimax.chat/v1/chat/completions"
+    Uses the native Minimax chat completion endpoint (v2), which is the
+    endpoint issued keys from platform.minimax.io are authorised against.
+    The OpenAI-compatible /v1/chat/completions path requires a separately
+    provisioned key and is NOT used here.
+    """
+
+    # Native endpoint — keys from platform.minimax.io work here.
+    API_BASE = "https://api.minimax.io"
+    API_PATH = "/v1/text/chatcompletion_v2"
     MODEL = "MiniMax-Text-01"
 
     def __init__(
@@ -153,7 +176,10 @@ class MinimaxProvider:
         # Key held in memory only; never logged.
         self._api_key = api_key
         self._model = model or self.MODEL
-        self._api_url = base_url.rstrip("/") if base_url else self.API_URL
+        # If the caller supplies a base_url override (e.g. regional host),
+        # append the native path. Otherwise use the default full URL.
+        base = base_url.rstrip("/") if base_url else self.API_BASE
+        self._api_url = f"{base}{self.API_PATH}"
 
     async def generate(self, user_prompt: str, system_prompt: str) -> str:
         """Call the Minimax chat completion API and return the response text."""
@@ -161,12 +187,13 @@ class MinimaxProvider:
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
+        messages: list[dict[str, str]] = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": user_prompt})
         payload = {
             "model": self._model,
-            "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": messages,
         }
         try:
             async with httpx.AsyncClient(
@@ -177,28 +204,51 @@ class MinimaxProvider:
                 )
                 response.raise_for_status()
                 data = response.json()
+                logger.debug("Minimax raw response: %s", data)
                 # Minimax returns API-level errors in base_resp even on HTTP 200.
                 base_resp = data.get("base_resp", {})
                 if base_resp.get("status_code", 0) != 0:
+                    logger.warning(
+                        "Minimax base_resp error: code=%s msg=%s",
+                        base_resp.get("status_code"),
+                        base_resp.get("status_msg"),
+                    )
                     raise AIProviderError(
                         f"Minimax API error: {base_resp.get('status_msg', 'unknown error')}"
                     )
+                # Native endpoint uses choices[0].message.content
+                # Fall back to reply field used by some legacy response shapes.
                 try:
-                    return data["choices"][0]["message"]["content"]
+                    content = (
+                        data["choices"][0]["message"]["content"]
+                        if "choices" in data
+                        else data["reply"]
+                    )
+                    return content
                 except (KeyError, IndexError) as exc:
+                    logger.error("Minimax unexpected response shape: %s", data)
                     raise AIProviderError(
                         f"Unexpected Minimax response format: {data}"
                     ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
+            # Log the response body to help diagnose unexpected errors.
+            try:
+                body = exc.response.json()
+            except Exception:
+                body = exc.response.text
+            logger.warning("Minimax HTTP %d response: %s", status, body)
             if status == 401:
-                raise AIProviderError("Invalid Minimax API key.") from exc
+                raise AIProviderError(
+                    "Invalid Minimax API key or wrong API endpoint. "
+                    "Ensure your key was issued for api.minimax.io and not a regional variant."
+                ) from exc
             if status == 429:
                 raise AIRateLimitError(
                     "Minimax rate limit exceeded. Please wait and retry."
                 ) from exc
             raise AIProviderError(
-                f"Minimax HTTP error: {status}"
+                f"Minimax HTTP error: {status} — {body}"
             ) from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -248,12 +298,32 @@ class GeminiProvider:
             }
         try:
             async with httpx.AsyncClient(
-                verify=_ssl_context(), timeout=120.0
+                verify=_ssl_context(), timeout=180.0
             ) as client:
                 response = await client.post(url, headers=headers, json=payload)
                 response.raise_for_status()
                 data = response.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                # Guard against safety blocks / MAX_TOKENS where content is absent.
+                candidate = data.get("candidates", [{}])[0]
+                finish_reason = candidate.get("finishReason", "")
+                if "content" not in candidate:
+                    logger.warning(
+                        "Gemini candidate missing 'content'. finishReason=%s full=%s",
+                        finish_reason,
+                        data,
+                    )
+                    raise AIProviderError(
+                        f"Gemini returned no content (finishReason: {finish_reason!r}). "
+                        "This may be a safety block or token-limit truncation. "
+                        "Try a shorter or simpler prompt."
+                    )
+                try:
+                    return candidate["content"]["parts"][0]["text"]
+                except (KeyError, IndexError) as exc:
+                    logger.error("Gemini unexpected candidate structure: %s", candidate)
+                    raise AIProviderError(
+                        f"Unexpected Gemini response structure: {candidate}"
+                    ) from exc
         except httpx.HTTPStatusError as exc:
             status = exc.response.status_code
             if status in (401, 403):
@@ -261,10 +331,24 @@ class GeminiProvider:
                     "Invalid or unauthorized Gemini API key."
                 ) from exc
             if status == 400:
-                raise AIProviderError("Invalid Gemini API request.") from exc
+                try:
+                    detail = exc.response.json()
+                except Exception:
+                    detail = exc.response.text
+                logger.warning("Gemini 400 response: %s", detail)
+                raise AIProviderError(f"Invalid Gemini API request: {detail}") from exc
             if status == 429:
+                # Surface retry-delay hint if Google includes it in the response.
+                try:
+                    retry_info = exc.response.json()
+                    retry_msg = str(retry_info)
+                except Exception:
+                    retry_msg = exc.response.text
+                logger.warning("Gemini rate limit response: %s", retry_msg)
                 raise AIRateLimitError(
-                    "Gemini rate limit exceeded. Please wait and retry."
+                    "Gemini rate limit exceeded. The free tier allows 15 requests/min "
+                    "and 1,500 requests/day. Please wait a minute and retry, or "
+                    "switch to a paid API key with higher quotas."
                 ) from exc
             raise AIProviderError(f"Gemini HTTP error: {status}") from exc
         except httpx.RequestError as exc:

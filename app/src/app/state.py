@@ -10,6 +10,7 @@ for async routes). asyncio.Lock guards shared mutable state.
 import asyncio
 import logging
 import subprocess
+import time
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,11 @@ _progress: int = 0             # 0-100
 _message: str = "Ready"
 _server_url: str | None = None
 _websockets: list[Any] = []    # Connected WebSocket clients
+_phase_updated_at: float = 0.0  # monotonic timestamp of last set_status call
+
+# Phases considered "in-progress" — auto-reset after STALE_TIMEOUT seconds
+_ACTIVE_PHASES = frozenset({"generating", "deploying"})
+_STALE_TIMEOUT: float = 300.0  # 5 minutes
 
 
 # --- Provider -----------------------------------------------------------------
@@ -58,16 +64,38 @@ def get_process() -> subprocess.Popen | None:
 
 def set_status(phase: str, progress: int, message: str, url: str | None = None) -> None:
     """Update the current execution phase, progress, and message."""
-    global _phase, _progress, _message, _server_url
+    global _phase, _progress, _message, _server_url, _phase_updated_at
     _phase = phase
     _progress = max(0, min(100, progress))
     _message = message
     _server_url = url
+    _phase_updated_at = time.monotonic()
     logger.debug("Status: phase=%s progress=%d msg=%s", phase, progress, message)
 
 
 def get_status() -> dict[str, Any]:
-    """Return the current execution status as a plain dict."""
+    """Return the current execution status as a plain dict.
+
+    If an active phase (generating/deploying) has not been updated for longer
+    than _STALE_TIMEOUT seconds, the status is auto-reset to 'idle' with an
+    error message.  This prevents the UI from being permanently stuck after a
+    silent background task failure.
+    """
+    global _phase, _progress, _message, _server_url, _phase_updated_at
+    if (
+        _phase in _ACTIVE_PHASES
+        and _phase_updated_at > 0
+        and (time.monotonic() - _phase_updated_at) > _STALE_TIMEOUT
+    ):
+        logger.warning(
+            "Generation phase '%s' has been stale for >%.0fs — auto-resetting.",
+            _phase,
+            _STALE_TIMEOUT,
+        )
+        _phase = "idle"
+        _progress = 0
+        _message = "Error: generation timed out. Please retry."
+        _server_url = None
     return {
         "phase": _phase,
         "progress": _progress,

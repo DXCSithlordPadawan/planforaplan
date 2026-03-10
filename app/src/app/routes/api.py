@@ -26,15 +26,17 @@ from app.models import (
     StopResponse,
 )
 from app.prompts import CODE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT
-from app.services.ai_provider import AIProviderError, AIRateLimitError, create_provider
+from app.services.ai_provider import AIProviderError, create_provider
 from app.services.file_service import (
     FileServiceError,
     copy_base_template,
     parse_generated_files,
+    validate_required_templates,
     write_generated_files,
 )
 from app.services.process_service import (
     ProcessServiceError,
+    install_requirements,
     kill_process_on_port,
     kill_process_tree,
     launch_browser,
@@ -64,26 +66,18 @@ async def health() -> dict[str, str]:
 
 @router.post("/config")
 async def configure(request: ConfigRequest) -> dict[str, str]:
-    """Validate and store AI provider credentials in process memory.
+    """Store AI provider credentials in process memory.
 
-    The API key is validated with a minimal test call before being stored.
-    It is never written to disk or included in any log output.
+    Credentials are accepted and stored immediately without a probe call.
+    Invalid keys will surface as errors on the first /api/plan or /api/generate
+    request. The API key is never written to disk or included in any log output.
     """
-    try:
-        provider = create_provider(
-            request.provider,
-            request.api_key,
-            base_url=request.base_url,
-            model=request.model,
-        )
-        # Validate credentials with a low-cost probe call
-        await provider.generate("Hello", "Reply with the single word: ok")
-    except AIRateLimitError as exc:
-        logger.warning("Provider configuration failed (rate limit): %s", exc)
-        raise HTTPException(status_code=429, detail=str(exc)) from exc
-    except AIProviderError as exc:
-        logger.warning("Provider configuration failed: %s", exc)
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    provider = create_provider(
+        request.provider,
+        request.api_key,
+        base_url=request.base_url,
+        model=request.model,
+    )
 
     # Close the previous provider's HTTP client if it exposes aclose()
     old_provider = state.get_provider()
@@ -145,11 +139,46 @@ async def _generate_and_deploy(requirement: str, plan: str) -> None:
         state.set_status("generating", 20, "Generating application code...")
         await state.broadcast("info", "Sending requirement + plan to AI for code generation...")
 
-        user_prompt = CODE_SYSTEM_PROMPT.format(
-            requirement=requirement,
-            plan=plan,
-        )
-        response = await provider.generate(user_prompt, "")
+        # CODE_SYSTEM_PROMPT contains the full instruction set; the formatted
+        # user message carries only requirement + plan so the system prompt
+        # slot is used correctly by every provider (Claude, Gemini, etc.).
+        code_system = CODE_SYSTEM_PROMPT
+        code_user = f"Requirement:\n{requirement}\n\n---\nApproved Plan:\n{plan}"
+
+        # Heartbeat: keep the UI alive while the AI call is in-flight.
+        # Without this, a long-running generation leaves the UI silent
+        # and stuck at 20% even though work is progressing.
+        heartbeat_messages = [
+            (15, "AI is working on your code — this may take a minute..."),
+            (30, "Still generating — code generation can take up to 2-3 minutes..."),
+            (60, "Almost there — waiting for AI response..."),
+            (90, "Finalising code generation..."),
+        ]
+
+        async def _heartbeat(stop_event: asyncio.Event) -> None:
+            """Send periodic status messages until stop_event is set."""
+            elapsed = 0
+            msg_index = 0
+            while not stop_event.is_set():
+                await asyncio.sleep(1)
+                elapsed += 1
+                if msg_index < len(heartbeat_messages):
+                    threshold, msg = heartbeat_messages[msg_index]
+                    if elapsed >= threshold:
+                        await state.broadcast("info", msg)
+                        msg_index += 1
+
+        stop_heartbeat = asyncio.Event()
+        heartbeat_task = asyncio.create_task(_heartbeat(stop_heartbeat))
+        try:
+            response = await provider.generate(code_user, code_system)
+        finally:
+            stop_heartbeat.set()
+            heartbeat_task.cancel()
+            try:
+                await heartbeat_task
+            except asyncio.CancelledError:
+                pass
 
         await state.broadcast("info", "Code generation complete. Parsing files...")
         state.set_status("generating", 50, "Parsing generated files...")
@@ -169,12 +198,32 @@ async def _generate_and_deploy(requirement: str, plan: str) -> None:
 
         deploy_dir = settings.deploy_dir
         base_template = settings.base_template_dir
+        # Acquire the running event loop once; reused for all executor calls below.
+        loop = asyncio.get_running_loop()
 
         copy_base_template(base_template, deploy_dir)
         await state.broadcast("info", "Writing generated files...")
 
         state.set_status("deploying", 70, "Writing generated files...")
         write_generated_files(files, deploy_dir)
+
+        # --- Template completeness check ------------------------------------
+        template_warnings = validate_required_templates(files, deploy_dir)
+        for warning in template_warnings:
+            await state.broadcast("error", f"[Template warning] {warning}")
+
+        # --- Dependency installation -----------------------------------------
+        state.set_status("deploying", 75, "Installing dependencies...")
+        dep_lines: list[tuple[str, str]] = []
+        await loop.run_in_executor(
+            None,
+            lambda: install_requirements(
+                deploy_dir,
+                log_callback=lambda lvl, msg: dep_lines.append((lvl, msg)),
+            ),
+        )
+        for lvl, msg in dep_lines:
+            await state.broadcast(lvl, msg)
 
         # --- Process startup -------------------------------------------------
         state.set_status("deploying", 80, "Starting application server...")
@@ -186,7 +235,6 @@ async def _generate_and_deploy(requirement: str, plan: str) -> None:
             await state.broadcast(level, message)
 
         # start_generated_app is synchronous; run it in a thread executor
-        loop = asyncio.get_running_loop()
         process = await loop.run_in_executor(
             None,
             lambda: start_generated_app(
@@ -197,11 +245,26 @@ async def _generate_and_deploy(requirement: str, plan: str) -> None:
         )
         state.set_process(process)
 
-        # wait_for_ready reads stdout — run in thread executor
-        url = await loop.run_in_executor(
-            None,
-            lambda: wait_for_ready(process, settings.generated_app_port, timeout=30),
-        )
+        # wait_for_ready reads stdout — run in thread executor.
+        # Collect stdout lines and broadcast them after the executor returns
+        # (thread-safe: list.append is atomic in CPython, asyncio broadcast
+        # happens back on the event loop thread).
+        stdout_lines: list[tuple[str, str]] = []
+
+        def _wait_and_collect() -> str:
+            """Run wait_for_ready and collect log lines for broadcast."""
+            return wait_for_ready(
+                process,
+                settings.generated_app_port,
+                timeout=30,
+                log_callback=lambda lvl, msg: stdout_lines.append((lvl, msg)),
+            )
+
+        url = await loop.run_in_executor(None, _wait_and_collect)
+
+        # Broadcast any stdout lines collected during startup.
+        for lvl, msg in stdout_lines:
+            await state.broadcast(lvl, msg)
 
         # --- Success ---------------------------------------------------------
         state.set_status("running", 100, "Application is running.", url=url)

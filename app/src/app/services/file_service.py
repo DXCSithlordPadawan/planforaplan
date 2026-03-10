@@ -143,3 +143,71 @@ def parse_generated_files(response: str) -> dict[str, str]:
         logger.warning("No file blocks found in AI response (length=%d)", len(response))
 
     return files
+
+
+# ---------------------------------------------------------------------------
+# Post-write completeness validation
+# ---------------------------------------------------------------------------
+
+
+def validate_required_templates(files: dict[str, str], deploy_root: Path) -> list[str]:
+    """Warn when required templates were not written by the AI.
+
+    After ``write_generated_files()`` has run, call this to check that
+    ``templates/index.html`` (the landing page served by GET /) was included
+    in the AI output and that every template path referenced in the generated
+    ``main.py`` is present on disk.
+
+    Args:
+        files:       The dict returned by ``parse_generated_files()``.
+        deploy_root: The deployment root directory.
+
+    Returns:
+        A list of warning message strings (empty if everything is present).
+    """
+    warnings: list[str] = []
+
+    # 1. templates/index.html is always required — it is the landing page.
+    index_key = "templates/index.html"
+    if index_key not in files:
+        msg = (
+            "AI did not generate 'templates/index.html'. "
+            "The landing page (GET /) will show the base-template stub. "
+            "Re-run generation or add templates/index.html manually."
+        )
+        logger.warning(msg)
+        warnings.append(msg)
+
+    # 2. Scan ALL generated .py files for TemplateResponse calls and verify
+    #    each referenced template was written to disk.
+    #    Routers/routes sub-packages also call TemplateResponse, so scanning
+    #    only main.py misses those references.
+    import re
+    _template_ref_pattern = re.compile(
+        r'TemplateResponse\s*\([^,)]*[,\s]*["\']([^"\']+\.html)["\']'
+    )
+    all_referenced: set[str] = set()
+    for py_file in deploy_root.rglob("*.py"):
+        # Skip __pycache__ and venv directories
+        if any(part in py_file.parts for part in ("__pycache__", ".venv", "venv")):
+            continue
+        try:
+            source = py_file.read_text(encoding="utf-8")
+            found = _template_ref_pattern.findall(source)
+            all_referenced.update(found)
+        except OSError:
+            pass
+
+    for template_name in sorted(all_referenced):
+        on_disk = deploy_root / "templates" / template_name
+        if not on_disk.exists():
+            rel = py_file.relative_to(deploy_root)
+            msg = (
+                f"A route references 'templates/{template_name}' "
+                "but the file was not generated. "
+                "Users will see a 500 error on that route."
+            )
+            logger.warning(msg)
+            warnings.append(msg)
+
+    return warnings

@@ -24,4 +24,6 @@ echo "Starting AI Application Generator on http://${APP_HOST}:${APP_PORT}"
 echo "Press Ctrl+C to stop."
 echo ""
 
-.venv/bin/uvicorn app.main:app --host "${APP_HOST}" --port "${APP_PORT}" --reload
+# --reload is intentionally omitted: uvicorn reload wipes in-memory provider state.
+# To enable hot-reload during development, add --reload to the line below.
+.venv/bin/uvicorn app.main:app --host "${APP_HOST}" --port "${APP_PORT}"

@@ -23,7 +23,7 @@ Respond in clear markdown format with a heading for each section.
 
 CODE_SYSTEM_PROMPT = """\
 Generate a complete, working Python web application based on the requirement and \
-plan provided below.
+plan provided in the user message.
 
 Technology stack:
 - Python 3.11+
@@ -47,21 +47,26 @@ Required files (include all of these):
                        import uvicorn
                        uvicorn.run(app, host="127.0.0.1", port=8001)
 - requirements.txt — one pip package per line (fastapi, uvicorn[standard], jinja2, etc.)
-- templates/index.html — base Jinja2 template with Tailwind CDN link
+- templates/index.html — the ACTUAL rendered landing page served by GET /.
+                         This MUST contain real visible HTML content for the user.
+                         If you use a base layout (templates/base.html), then
+                         templates/index.html MUST extend it and fill the content
+                         blocks. It must NOT be empty or contain only block tags.
 
-Add further templates, static files, or Python modules as needed by the plan.
+BEFORE YOU FINISH, run this checklist — every item must be YES:
+  [ ] Does templates/index.html exist as a <file> block? (required)
+  [ ] Does every TemplateResponse() call in every .py file have a matching
+      <file path="templates/..."> block?
+  [ ] If you have routers/ or routes/ files, have you scanned each one for
+      TemplateResponse() calls and included those templates?
+  [ ] Is templates/index.html a fully rendered page, not just a skeleton?
+
+Do NOT omit any template that is referenced by any route in any .py file.
+Missing templates will cause HTTP 500 errors on those routes.
 
 The application must start successfully with:
     uvicorn main:app --host 127.0.0.1 --port 8001
 
 Use Jinja2 template syntax ({{ variable }}, {% block %}, etc.).
 Do NOT use JSX or React component syntax.
-
----
-Requirement:
-{requirement}
-
----
-Approved Plan:
-{plan}
 """

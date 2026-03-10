@@ -393,6 +393,96 @@ copy .env.example .env
 
 ---
 
+## 12. Known Issues and Fixes Log
+
+### Session: 2026-03-10 — Provider Configuration Fixes
+
+The following defects were identified and resolved in `src/app/services/ai_provider.py`, `src/app/routes/api.py`, and the start scripts.
+
+---
+
+#### Issue 1 — OpenRouter / Custom provider returns HTTP 429 on config save
+
+**Symptom:** Configuring a free-tier OpenRouter model (e.g. `cognitivecomputations/dolphin-mistral-24b-venice-edition:free`) produced a 429 Too Many Requests error immediately on clicking *Validate & Save*.
+
+**Root cause:** The `POST /api/config` endpoint was making a live probe call (`provider.generate("Hello", ...)`) to validate the key before storing it. Free-tier OpenRouter models have very low rate limits (1–3 req/min); the probe call consumed the quota immediately.
+
+**Fix:** Removed the probe call from `configure()` in `routes/api.py`. The provider is now stored immediately. An invalid key will surface naturally on the first `POST /api/plan` or `POST /api/generate` call.
+
+**Files changed:** `src/app/routes/api.py`
+
+---
+
+#### Issue 2 — Provider shows as "not configured" after a successful config save
+
+**Symptom:** After a successful *Validate & Save*, clicking *Generate Plan* returned "Provider not configured".
+
+**Root cause:** All three start scripts (`start.ps1`, `start.bat`, `start.sh`) launched uvicorn with the `--reload` flag. Hot-reload restarts the worker process on any file-system change, wiping the module-level `_provider` global in `state.py` back to `None`.
+
+**Fix:** Removed `--reload` from all three start scripts. A comment was added explaining why — reload is incompatible with in-memory session state.
+
+**Files changed:** `start.ps1`, `start.bat`, `start.sh`
+
+---
+
+#### Issue 3 — Minimax returns HTTP 401 "Invalid API key" on Generate Plan
+
+**Symptom:** Minimax provider configured successfully, but `POST /api/plan` returned HTTP 502 with message "Invalid Minimax API key or wrong API endpoint".
+
+**Root cause (first):** `MinimaxProvider.API_URL` was set to the old `api.minimax.chat` domain, which is no longer active. Minimax's current host is `api.minimax.io`. Sending a valid key to the wrong host results in a 401.
+
+**Root cause (second):** After fixing the host, the provider was still hitting `/v1/chat/completions` (OpenAI-compatible path). Keys issued from `platform.minimax.io` are provisioned for the **native** endpoint `/v1/text/chatcompletion_v2`, not the OpenAI-compat layer.
+
+**Root cause (third):** The `generate()` payload always included `{"role": "system", "content": ""}` even when `system_prompt` was empty. Minimax rejects an empty-content system message.
+
+**Fix:** Updated `MinimaxProvider` to use `API_BASE = "https://api.minimax.io"` and `API_PATH = "/v1/text/chatcompletion_v2"`. The system message is now only added to the payload when `system_prompt` is non-empty. Response parsing falls back to the `reply` field if `choices` is absent.
+
+**Files changed:** `src/app/services/ai_provider.py`
+
+---
+
+#### Issue 4 — Minimax error 1004 persists after endpoint fix
+
+**Symptom:** After switching to the native endpoint, HTTP 200 was returned but `base_resp.status_code = 1004` in the body: *"login fail: Please carry the API secret key in the Authorization field"*.
+
+**Root cause:** The API key being submitted was an **OpenRouter key** (`sk-o...`, length 73) pasted into the Minimax provider field by mistake. Minimax's native API requires a key issued from `platform.minimax.io` (JWT format, `eyJ...`, 150+ characters).
+
+**Resolution:** User configuration issue — not a code defect. The user should either:
+- Select **Custom** provider with Base URL `https://openrouter.ai/api/v1` and their `sk-o...` key, **or**
+- Obtain a genuine Minimax key from `https://platform.minimax.io`.
+
+**L1 diagnostic tip:** If a user reports Minimax error 1004, ask them to check the key they entered. A Minimax key must start with `eyJ` and be at least 150 characters. An `sk-...` key is from a different provider.
+
+---
+
+#### Issue 5 — Gemini returns HTTP 429 rate limit on Generate Plan
+
+**Symptom:** Gemini provider key validates successfully, but `POST /api/plan` returns 502 with "Gemini rate limit exceeded".
+
+**Root cause:** Genuine Google API quota exhaustion. The Gemini free tier (`gemini-2.0-flash`) allows 15 requests/minute and 1,500 requests/day. Repeated testing within the same day or minute exhausts this quota.
+
+**Resolution:** User/environment issue — not a code defect.
+- Wait 60 seconds and retry if hitting the per-minute limit.
+- If the daily limit is exhausted, wait until midnight Pacific time (Google quota reset).
+- Switch to a paid Google AI Studio key with higher quotas for production use.
+- Alternatively use the **Custom** provider with OpenRouter which provides free access to many models.
+
+**Code improvement applied:** The 429 error message now tells the user the specific free-tier limits and suggests waiting or switching to a paid key. The Gemini 400 error now logs and surfaces the full response body to aid future diagnosis.
+
+**Files changed:** `src/app/services/ai_provider.py`
+
+**L1 diagnostic tip:** If a user reports Gemini rate limit errors, ask how many times they have clicked Generate Plan today. If more than ~10 times on a free key, the daily quota is likely exhausted.
+
+---
+
+#### Issue 6 — Claude provider authentication and plan generation working correctly
+
+**Status:** Confirmed working as of 2026-03-10.
+
+Claude (Anthropic) provider successfully authenticates and generates plans end-to-end with no issues. No code changes required for this provider in this session.
+
+---
+
 ## 11. Support Escalation Checklist
 
 Before escalating to L2 or L3, confirm the following have been attempted and documented:

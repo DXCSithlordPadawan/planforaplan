@@ -29,4 +29,6 @@ Write-Host "Starting AI Application Generator on http://${appHost}:${appPort}"
 Write-Host "Press Ctrl+C to stop."
 Write-Host ""
 
-& .\.venv\Scripts\uvicorn.exe app.main:app --host $appHost --port $appPort --reload
+# --reload is intentionally omitted: uvicorn reload wipes in-memory provider state.
+# To enable hot-reload during development, add --reload to the line below.
+& .\.venv\Scripts\uvicorn.exe app.main:app --host $appHost --port $appPort
