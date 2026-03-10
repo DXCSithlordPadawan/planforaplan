@@ -11,10 +11,10 @@ from typing_extensions import Self
 class ConfigRequest(BaseModel):
     """Request body for POST /api/config.
 
-    Built-in providers (set ``provider`` to one of these, no extra fields):
-        ``claude``   — Anthropic Claude
-        ``minimax``  — Minimax
-        ``gemini``   — Google Gemini
+    Built-in providers (set ``provider`` to one of these):
+        ``claude``   — Anthropic Claude (default model overridable via ``model``/``base_url``)
+        ``minimax``  — Minimax (default model overridable via ``model``/``base_url``)
+        ``gemini``   — Google Gemini (default model overridable via ``model``/``base_url``)
 
     Custom OpenAI-compatible provider (``provider`` = any other identifier):
         Both ``base_url`` and ``model`` are **required** for custom providers.
@@ -41,8 +41,8 @@ class ConfigRequest(BaseModel):
         default=None,
         max_length=2048,
         description=(
-            "Base URL of the OpenAI-compatible endpoint. "
-            "Required for custom providers. "
+            "Optional base URL override for any built-in provider, or the "
+            "required endpoint URL for custom providers. "
             "Example: 'https://api.openai.com/v1'"
         ),
     )
@@ -51,8 +51,8 @@ class ConfigRequest(BaseModel):
         min_length=1,
         max_length=256,
         description=(
-            "Model identifier as expected by the remote service. "
-            "Required for custom providers."
+            "Optional model identifier override for any built-in provider, "
+            "or the required model name for custom providers."
         ),
     )
 
@@ -83,7 +83,11 @@ class ConfigRequest(BaseModel):
         "json_schema_extra": {
             "examples": [
                 {"provider": "claude", "api_key": "sk-ant-..."},
+                {"provider": "claude", "api_key": "sk-ant-...", "model": "claude-3-5-haiku-20241022"},
+                {"provider": "minimax", "api_key": "minimax-key..."},
+                {"provider": "minimax", "api_key": "minimax-key...", "model": "abab6.5-chat"},
                 {"provider": "gemini", "api_key": "AIza..."},
+                {"provider": "gemini", "api_key": "AIza...", "model": "gemini-1.5-flash"},
                 {
                     "provider": "my-llm",
                     "api_key": "my-key",

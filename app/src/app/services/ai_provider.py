@@ -34,6 +34,10 @@ class AIProviderError(Exception):
     """Raised when an AI provider call fails for any reason."""
 
 
+class AIRateLimitError(AIProviderError):
+    """Raised when an AI provider returns HTTP 429 (rate limit exceeded)."""
+
+
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
@@ -76,16 +80,26 @@ class ClaudeProvider:
     # Pin to the current production model; update here when upgrading.
     MODEL = "claude-sonnet-4-20250514"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         # Keep a reference to the httpx client so it can be closed when this
         # provider instance is no longer needed (e.g. replaced by a new
         # configuration). The Anthropic SDK does not close an externally
         # supplied client, so we manage its lifecycle here.
         self._http_client = httpx.AsyncClient(verify=_ssl_context())
+        self._model = model or self.MODEL
         # Client holds the key in memory only; never logged.
-        self._client = anthropic.AsyncAnthropic(
-            api_key=api_key, http_client=self._http_client
-        )
+        kwargs: dict[str, object] = {
+            "api_key": api_key,
+            "http_client": self._http_client,
+        }
+        if base_url:
+            kwargs["base_url"] = base_url
+        self._client = anthropic.AsyncAnthropic(**kwargs)
 
     async def aclose(self) -> None:
         """Close the underlying HTTP client. Call when discarding this provider."""
@@ -95,7 +109,7 @@ class ClaudeProvider:
         """Call the Claude Messages API and return the response text."""
         try:
             message = await self._client.messages.create(
-                model=self.MODEL,
+                model=self._model,
                 max_tokens=8192,
                 system=system_prompt,
                 messages=[{"role": "user", "content": user_prompt}],
@@ -104,7 +118,7 @@ class ClaudeProvider:
         except anthropic.AuthenticationError as exc:
             raise AIProviderError("Invalid Claude API key.") from exc
         except anthropic.RateLimitError as exc:
-            raise AIProviderError(
+            raise AIRateLimitError(
                 "Claude rate limit exceeded. Please wait and retry."
             ) from exc
         except anthropic.APIError as exc:
@@ -120,10 +134,18 @@ class MinimaxProvider:
     """Minimax AI provider using async httpx HTTP client."""
 
     API_URL = "https://api.minimax.chat/v1/text/chatcompletion_v2"
+    MODEL = "abab6.5s-chat"
 
-    def __init__(self, api_key: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        model: str | None = None,
+        base_url: str | None = None,
+    ) -> None:
         # Key held in memory only; never logged.
         self._api_key = api_key
+        self._model = model or self.MODEL
+        self._api_url = base_url.rstrip("/") if base_url else self.API_URL
 
     async def generate(self, user_prompt: str, system_prompt: str) -> str:
         """Call the Minimax chat completion API and return the response text."""
@@ -132,7 +154,7 @@ class MinimaxProvider:
             "Content-Type": "application/json",
         }
         payload = {
-            "model": "abab6.5s-chat",
+            "model": self._model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
@@ -143,16 +165,21 @@ class MinimaxProvider:
                 verify=_ssl_context(), timeout=120.0
             ) as client:
                 response = await client.post(
-                    self.API_URL, headers=headers, json=payload
+                    self._api_url, headers=headers, json=payload
                 )
                 response.raise_for_status()
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
+            status = exc.response.status_code
+            if status == 401:
                 raise AIProviderError("Invalid Minimax API key.") from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Minimax rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(
-                f"Minimax HTTP error: {exc.response.status_code}"
+                f"Minimax HTTP error: {status}"
             ) from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -216,6 +243,10 @@ class GeminiProvider:
                 ) from exc
             if status == 400:
                 raise AIProviderError("Invalid Gemini API request.") from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Gemini rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(f"Gemini HTTP error: {status}") from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -272,12 +303,17 @@ class CustomProvider:
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
+            status = exc.response.status_code
+            if status == 401:
                 raise AIProviderError(
                     "Invalid API key for custom provider."
                 ) from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Custom provider rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(
-                f"Custom provider HTTP error: {exc.response.status_code}"
+                f"Custom provider HTTP error: {status}"
             ) from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -299,8 +335,8 @@ def create_provider(
     """Return the correct AIProvider instance for the given provider name.
 
     Built-in providers (case-insensitive):
-        ``claude``   — Anthropic Claude (claude-sonnet-4-20250514)
-        ``minimax``  — Minimax (abab6.5s-chat)
+        ``claude``   — Anthropic Claude (claude-sonnet-4-20250514, overridable via model/base_url)
+        ``minimax``  — Minimax (abab6.5s-chat, overridable via model/base_url)
         ``gemini``   — Google Gemini (gemini-2.0-flash, overridable via model/base_url)
 
     Custom provider:
@@ -310,11 +346,10 @@ def create_provider(
     Args:
         provider_name: Provider identifier (case-insensitive).
         api_key:       Provider API key — held in memory only.
-        base_url:      Optional override for built-in Gemini endpoint base URL.
-                       Required for custom providers. Base URL of the
-                       OpenAI-compatible endpoint.
-        model:         Optional model override for Gemini (defaults to
-                       ``gemini-2.0-flash``). Required for custom providers.
+        base_url:      Optional base URL override for built-in providers.
+                       Required for custom providers.
+        model:         Optional model override for built-in providers.
+                       Required for custom providers.
 
     Raises:
         AIProviderError: If the provider is not recognised and
@@ -322,9 +357,9 @@ def create_provider(
     """
     match provider_name.lower():
         case "claude":
-            return ClaudeProvider(api_key)
+            return ClaudeProvider(api_key, model=model, base_url=base_url)
         case "minimax":
-            return MinimaxProvider(api_key)
+            return MinimaxProvider(api_key, model=model, base_url=base_url)
         case "gemini":
             return GeminiProvider(api_key, model=model, base_url=base_url)
         case _:
