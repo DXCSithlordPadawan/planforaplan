@@ -58,14 +58,22 @@ class AIProvider(Protocol):
 
 
 def _ssl_context() -> ssl.SSLContext:
-    """Return an SSLContext loaded with the certifi CA bundle.
+    """Return an SSLContext that trusts both the OS certificate store and certifi.
 
-    Using certifi ensures that the Mozilla root certificates are available
-    regardless of the host OS trust store configuration, which fixes
-    SSL: CERTIFICATE_VERIFY_FAILED errors seen on some Linux and macOS
-    environments.
+    Two-step approach:
+    1. ``ssl.create_default_context()`` (no cafile) loads the platform's default
+       CA store — Windows Certificate Store on Windows, Keychain on macOS, and
+       the system CA bundle on Linux.  Passing cafile= would *replace* the system
+       store entirely, which discards Windows trust anchors and causes
+       ``SSL: CERTIFICATE_VERIFY_FAILED`` errors for providers (e.g. Minimax)
+       whose intermediate CA is present in the Windows store but absent from the
+       certifi bundle.
+    2. ``ctx.load_verify_locations(cafile=certifi.where())`` *adds* the Mozilla
+       root certificates from certifi on top of whatever the OS already loaded,
+       ensuring good coverage on all platforms.
     """
-    ctx = ssl.create_default_context(cafile=certifi.where())
+    ctx = ssl.create_default_context()
+    ctx.load_verify_locations(cafile=certifi.where())
     return ctx
 
 

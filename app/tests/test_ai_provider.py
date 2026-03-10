@@ -25,10 +25,16 @@ class TestSslContext:
     def test_calls_create_default_context_with_certifi_cafile(self) -> None:
         import certifi
 
+        mock_ctx = MagicMock(spec=ssl.SSLContext)
         with patch("ssl.create_default_context") as mock_create:
-            mock_create.return_value = MagicMock(spec=ssl.SSLContext)
+            mock_create.return_value = mock_ctx
             _ssl_context()
-            mock_create.assert_called_once_with(cafile=certifi.where())
+            # Step 1: create_default_context must be called WITHOUT cafile so the
+            # platform's default CA store (Windows Certificate Store, macOS
+            # Keychain, Linux system certs) is loaded first.
+            mock_create.assert_called_once_with()
+            # Step 2: certifi bundle is added on top via load_verify_locations.
+            mock_ctx.load_verify_locations.assert_called_once_with(cafile=certifi.where())
 
 
 class TestCreateProviderFactory:
