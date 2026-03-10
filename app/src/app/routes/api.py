@@ -26,7 +26,7 @@ from app.models import (
     StopResponse,
 )
 from app.prompts import CODE_SYSTEM_PROMPT, PLAN_SYSTEM_PROMPT
-from app.services.ai_provider import AIProviderError, create_provider
+from app.services.ai_provider import AIProviderError, AIRateLimitError, create_provider
 from app.services.file_service import (
     FileServiceError,
     copy_base_template,
@@ -78,6 +78,9 @@ async def configure(request: ConfigRequest) -> dict[str, str]:
         )
         # Validate credentials with a low-cost probe call
         await provider.generate("Hello", "Reply with the single word: ok")
+    except AIRateLimitError as exc:
+        logger.warning("Provider configuration failed (rate limit): %s", exc)
+        raise HTTPException(status_code=429, detail=str(exc)) from exc
     except AIProviderError as exc:
         logger.warning("Provider configuration failed: %s", exc)
         raise HTTPException(status_code=401, detail=str(exc)) from exc

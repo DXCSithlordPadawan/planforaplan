@@ -34,6 +34,10 @@ class AIProviderError(Exception):
     """Raised when an AI provider call fails for any reason."""
 
 
+class AIRateLimitError(AIProviderError):
+    """Raised when an AI provider returns HTTP 429 (rate limit exceeded)."""
+
+
 # ---------------------------------------------------------------------------
 # Protocol
 # ---------------------------------------------------------------------------
@@ -149,10 +153,15 @@ class MinimaxProvider:
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
+            status = exc.response.status_code
+            if status == 401:
                 raise AIProviderError("Invalid Minimax API key.") from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Minimax rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(
-                f"Minimax HTTP error: {exc.response.status_code}"
+                f"Minimax HTTP error: {status}"
             ) from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -216,6 +225,10 @@ class GeminiProvider:
                 ) from exc
             if status == 400:
                 raise AIProviderError("Invalid Gemini API request.") from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Gemini rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(f"Gemini HTTP error: {status}") from exc
         except httpx.RequestError as exc:
             raise AIProviderError(
@@ -272,12 +285,17 @@ class CustomProvider:
                 data = response.json()
                 return data["choices"][0]["message"]["content"]
         except httpx.HTTPStatusError as exc:
-            if exc.response.status_code == 401:
+            status = exc.response.status_code
+            if status == 401:
                 raise AIProviderError(
                     "Invalid API key for custom provider."
                 ) from exc
+            if status == 429:
+                raise AIRateLimitError(
+                    "Custom provider rate limit exceeded. Please wait and retry."
+                ) from exc
             raise AIProviderError(
-                f"Custom provider HTTP error: {exc.response.status_code}"
+                f"Custom provider HTTP error: {status}"
             ) from exc
         except httpx.RequestError as exc:
             raise AIProviderError(

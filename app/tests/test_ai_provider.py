@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.services.ai_provider import (
     AIProviderError,
+    AIRateLimitError,
     ClaudeProvider,
     CustomProvider,
     GeminiProvider,
@@ -163,7 +164,75 @@ class TestGeminiProviderSsl:
         assert isinstance(captured[0].get("verify"), ssl.SSLContext)
 
 
-class TestCustomProviderSsl:
+class TestGeminiProviderRateLimit:
+    @pytest.mark.asyncio
+    async def test_raises_ai_rate_limit_error_on_429(self) -> None:
+        """GeminiProvider must raise AIRateLimitError for HTTP 429 responses."""
+        import httpx
+
+        provider = GeminiProvider("AIzaSy-test-key")
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_exc = httpx.HTTPStatusError(
+            "429 Too Many Requests", request=MagicMock(), response=mock_response
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=mock_exc)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(AIRateLimitError, match="rate limit exceeded"):
+                await provider.generate("hi", "sys")
+
+    def test_rate_limit_error_is_subclass_of_ai_provider_error(self) -> None:
+        """AIRateLimitError must be a subclass of AIProviderError."""
+        assert issubclass(AIRateLimitError, AIProviderError)
+
+
+class TestMinimaxProviderRateLimit:
+    @pytest.mark.asyncio
+    async def test_raises_ai_rate_limit_error_on_429(self) -> None:
+        """MinimaxProvider must raise AIRateLimitError for HTTP 429 responses."""
+        import httpx
+
+        provider = MinimaxProvider("minimax-test-key-1234")
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_exc = httpx.HTTPStatusError(
+            "429 Too Many Requests", request=MagicMock(), response=mock_response
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=mock_exc)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(AIRateLimitError, match="rate limit exceeded"):
+                await provider.generate("hi", "sys")
+
+
+class TestCustomProviderRateLimit:
+    @pytest.mark.asyncio
+    async def test_raises_ai_rate_limit_error_on_429(self) -> None:
+        """CustomProvider must raise AIRateLimitError for HTTP 429 responses."""
+        import httpx
+
+        provider = CustomProvider(
+            "key-1234567890",
+            "https://api.example.com/v1",
+            "my-model",
+        )
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+        mock_exc = httpx.HTTPStatusError(
+            "429 Too Many Requests", request=MagicMock(), response=mock_response
+        )
+        mock_client = AsyncMock()
+        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(side_effect=mock_exc)
+        with patch("httpx.AsyncClient", return_value=mock_client):
+            with pytest.raises(AIRateLimitError, match="rate limit exceeded"):
+                await provider.generate("hi", "sys")
     @pytest.mark.asyncio
     async def test_uses_certifi_ssl_context(self) -> None:
         """CustomProvider must pass verify=<SSLContext> to httpx."""

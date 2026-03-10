@@ -2,8 +2,10 @@
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock, patch
 
 from app import state
+from app.services.ai_provider import AIRateLimitError
 
 
 class TestHealthEndpoint:
