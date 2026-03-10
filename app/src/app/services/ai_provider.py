@@ -98,7 +98,16 @@ class ClaudeProvider:
         # provider instance is no longer needed (e.g. replaced by a new
         # configuration). The Anthropic SDK does not close an externally
         # supplied client, so we manage its lifecycle here.
-        self._http_client = httpx.AsyncClient(verify=_ssl_context())
+        # Timeout breakdown:
+        #   connect=10s  — TCP handshake to Anthropic API
+        #   read=480s    — max gap between streamed tokens (8 minutes covers
+        #                  the largest 32K-token responses at typical speeds)
+        #   write=30s    — time to upload the request body
+        #   pool=10s     — wait for a connection slot
+        self._http_client = httpx.AsyncClient(
+            verify=_ssl_context(),
+            timeout=httpx.Timeout(connect=10.0, read=480.0, write=30.0, pool=10.0),
+        )
         self._model = model or self.MODEL
         # Client holds the key in memory only; never logged.
         kwargs: dict[str, object] = {

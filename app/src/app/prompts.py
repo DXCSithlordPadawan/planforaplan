@@ -76,4 +76,9 @@ The application must start successfully with:
 
 Use Jinja2 template syntax ({{ variable }}, {% block %}, etc.).
 Do NOT use JSX or React component syntax.
+
+Pydantic compatibility rules (the host uses Pydantic v2):
+- Use .model_dump() not .dict() on all Pydantic model instances
+- Use float | int for numeric fields that may hold decimals, not int alone
+- Do NOT pin pydantic in requirements.txt — it is already installed
 """

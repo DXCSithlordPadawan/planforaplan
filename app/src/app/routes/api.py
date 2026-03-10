@@ -156,12 +156,16 @@ async def _generate_and_deploy(requirement: str, plan: str) -> None:
         ]
 
         async def _heartbeat(stop_event: asyncio.Event) -> None:
-            """Send periodic status messages until stop_event is set."""
+            """Send periodic status messages and refresh stale-guard timestamp."""
             elapsed = 0
             msg_index = 0
             while not stop_event.is_set():
                 await asyncio.sleep(1)
                 elapsed += 1
+                # Refresh the stale-guard timestamp every tick so the 300s
+                # auto-reset in state.get_status() doesn't fire while the
+                # AI stream is still actively running.
+                state.set_status("generating", 20, "Generating application code...")
                 if msg_index < len(heartbeat_messages):
                     threshold, msg = heartbeat_messages[msg_index]
                     if elapsed >= threshold:

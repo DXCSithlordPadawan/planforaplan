@@ -30,7 +30,7 @@ _phase_updated_at: float = 0.0  # monotonic timestamp of last set_status call
 
 # Phases considered "in-progress" — auto-reset after STALE_TIMEOUT seconds
 _ACTIVE_PHASES = frozenset({"generating", "deploying"})
-_STALE_TIMEOUT: float = 300.0  # 5 minutes
+_STALE_TIMEOUT: float = 600.0  # 10 minutes — covers large 32K-token generations
 
 
 # --- Provider -----------------------------------------------------------------
