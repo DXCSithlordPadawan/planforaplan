@@ -36,9 +36,45 @@ class TestCreateProviderFactory:
         provider = create_provider("claude", "sk-ant-test1234567890")
         assert isinstance(provider, ClaudeProvider)
 
+    def test_creates_claude_provider_with_custom_model(self) -> None:
+        provider = create_provider("claude", "sk-ant-test1234567890", model="claude-3-5-haiku-20241022")
+        assert isinstance(provider, ClaudeProvider)
+        assert provider._model == "claude-3-5-haiku-20241022"
+
+    def test_creates_claude_provider_with_custom_base_url(self) -> None:
+        provider = create_provider(
+            "claude",
+            "sk-ant-test1234567890",
+            base_url="https://my-proxy.example.com/anthropic",
+        )
+        assert isinstance(provider, ClaudeProvider)
+
+    def test_claude_provider_defaults(self) -> None:
+        provider = ClaudeProvider("sk-ant-test1234567890")
+        assert provider._model == ClaudeProvider.MODEL
+
     def test_creates_minimax_provider(self) -> None:
         provider = create_provider("minimax", "minimax-test-key-1234")
         assert isinstance(provider, MinimaxProvider)
+
+    def test_creates_minimax_provider_with_custom_model(self) -> None:
+        provider = create_provider("minimax", "minimax-test-key-1234", model="abab6.5-chat")
+        assert isinstance(provider, MinimaxProvider)
+        assert provider._model == "abab6.5-chat"
+
+    def test_creates_minimax_provider_with_custom_base_url(self) -> None:
+        provider = create_provider(
+            "minimax",
+            "minimax-test-key-1234",
+            base_url="https://my-proxy.example.com/v1/text/chatcompletion_v2",
+        )
+        assert isinstance(provider, MinimaxProvider)
+        assert provider._api_url == "https://my-proxy.example.com/v1/text/chatcompletion_v2"
+
+    def test_minimax_provider_defaults(self) -> None:
+        provider = MinimaxProvider("minimax-test-key-1234")
+        assert provider._model == MinimaxProvider.MODEL
+        assert provider._api_url == MinimaxProvider.API_URL
 
     def test_creates_gemini_provider(self) -> None:
         provider = create_provider("gemini", "AIzaSy-test-key-1234567")
@@ -233,6 +269,9 @@ class TestCustomProviderRateLimit:
         with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(AIRateLimitError, match="rate limit exceeded"):
                 await provider.generate("hi", "sys")
+
+
+class TestCustomProviderSsl:
     @pytest.mark.asyncio
     async def test_uses_certifi_ssl_context(self) -> None:
         """CustomProvider must pass verify=<SSLContext> to httpx."""
