@@ -1,9 +1,9 @@
 # AI Application Generator — Documentation Index
 
-**Version:** 2.0  
-**Date:** March 2026  
+**Version:** 2.1  
+**Date:** 2026-03-10  
 **Application:** AI Application Generator  
-**Stack:** Python 3.11+ · FastAPI · Jinja2 · Podman
+**Stack:** Python 3.11+ · FastAPI · Jinja2 · Anthropic SDK · Podman
 
 ---
 
@@ -21,6 +21,7 @@
 | 08 | [Maintenance Guide](08-MAINTENANCE-GUIDE.md) | DevOps, Lead Developer | Routine schedule, dependency updates, security scanning, base template maintenance, Python upgrades, AI model updates |
 | 09 | [Deployment Guide](09-DEPLOYMENT-GUIDE.md) | DevOps, SysAdmins | Windows and Linux installation, environment configuration, development and production modes, reverse proxy, troubleshooting |
 | 10 | [Container Build Guide](10-CONTAINER-BUILD-GUIDE.md) | DevOps, SysAdmins | Containerfile walkthrough, Podman build and run commands, hardened runtime flags, volumes, image scanning, air-gapped deployment |
+| — | [Bug Fix Log](BUGFIX_LOG.md) | Developers | Chronological record of all identified bugs and their resolutions |
 
 ---
 
@@ -28,22 +29,29 @@
 
 ### Starting the Application
 
-**Windows:**
+**Windows (PowerShell):**
+```powershell
+cd C:\planforaplan
+.\start.ps1
+```
+
+**Windows (Command Prompt):**
 ```cmd
-cd C:\path\to\app
+cd C:\planforaplan
 start.bat
 ```
 
 **Linux / macOS:**
 ```bash
-cd /path/to/app
+cd /path/to/planforaplan
 ./start.sh
 ```
 → Open `http://127.0.0.1:8000`
 
 ### Running Tests
 
-**Windows:** `test.bat`  
+**Windows (PowerShell):** `.\test.ps1`  
+**Windows (Command Prompt):** `test.bat`  
 **Linux / macOS:** `./test.sh`
 
 ### Building the Container
@@ -74,4 +82,4 @@ curl http://127.0.0.1:8000/api/health
 
 ---
 
-*All documents are maintained in `app/docs/`*
+*All documents are maintained in `C:\planforaplan\docs\`*

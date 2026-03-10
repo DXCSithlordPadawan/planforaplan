@@ -1,8 +1,8 @@
 # AI Application Generator — Deployment Guide
 
-**Version:** 2.2  
-**Date:** March 2026  
-**Audience:** DevOps, System Administrators  
+**Version:** 2.2
+**Date:** 2026-03-10
+**Audience:** DevOps, System Administrators
 **Platform:** Windows · Linux · macOS · Container (Podman/Docker)
 
 ---
@@ -52,7 +52,7 @@ flowchart TD
 ```
 
 Two virtual environments are required:
-1. **`.venv/`** — the orchestrator's dependencies (FastAPI, anthropic SDK, psutil, etc.)
+1. **`.venv/`** — the orchestrator's dependencies (FastAPI, anthropic SDK, psutil, certifi, etc.)
 2. **`base-template/.venv/`** — pre-installed dependencies for generated apps (FastAPI, jinja2, uvicorn)
 
 ---
@@ -80,7 +80,7 @@ Two virtual environments are required:
 After successful installation, the directory structure is:
 
 ```
-app/
+planforaplan/
 ├── .env                        ← Created from .env.example by setup script
 ├── .env.example                ← Template for environment variables
 ├── .gitignore
@@ -152,14 +152,14 @@ pip --version
 
 ### Step 2 — Copy Application Files
 
-Place the application directory at `C:\saabdemo\app\` (or any path without spaces).
+Place the application directory at `C:\planforaplan\` (or any path without spaces).
 
 ### Step 3 — Run Setup
 
 Open PowerShell, navigate to the application directory, and run:
 
 ```powershell
-cd C:\path\to\app
+cd C:\planforaplan
 .\setup.ps1
 ```
 
@@ -230,12 +230,12 @@ Same as Section 4, Step 1.
 
 ### Step 2 — Copy Application Files
 
-Place the application directory at `C:\saabdemo\app\` (or any path without spaces).
+Place the application directory at `C:\planforaplan\` (or any path without spaces).
 
 ### Step 3 — Run Setup
 
 ```cmd
-cd C:\path\to\app
+cd C:\planforaplan
 setup.bat
 ```
 
@@ -291,22 +291,17 @@ python3 --version
 
 ### Step 2 — Copy Application Files
 
-Place the application directory at a path of your choice (e.g. `~/app`).
+Place the application directory at a path of your choice (e.g. `~/planforaplan`).
 
 ### Step 3 — Run Setup
 
 ```bash
-cd /path/to/app
+cd /path/to/planforaplan
 chmod +x setup.sh start.sh test.sh
 ./setup.sh
 ```
 
-`setup.sh` performs the same five steps as `setup.ps1`:
-1. Creates `.venv/` using the system `python3`
-2. Upgrades pip inside `.venv/`
-3. Installs all dependencies from `pyproject.toml` (including dev tools)
-4. Creates `base-template/.venv/` and installs `base-template/requirements.txt`
-5. Creates `.env` from `.env.example` if `.env` does not already exist
+`setup.sh` performs the same five steps as `setup.ps1`.
 
 ### Step 4 — Review the Environment File
 
@@ -359,22 +354,22 @@ LOG_LEVEL=INFO
 
 **`APP_HOST`** — Set to `127.0.0.1` for local-only access. Change to `0.0.0.0` only if a network-accessible deployment is needed (and only with authentication and HTTPS in place — see Section 12).
 
-**`APP_PORT`** — Set to any unused port. The start scripts (`start.sh`, `start.ps1`, `start.bat`) read this value from `.env` at launch time and pass it to uvicorn automatically. You do not need to edit the scripts. The application will be accessible at `http://<APP_HOST>:<APP_PORT>` once started.
+**`APP_PORT`** — Set to any unused port. The start scripts (`start.sh`, `start.ps1`, `start.bat`) read this value from `.env` at launch time and pass it to uvicorn automatically. You do not need to edit the scripts.
 
 **`DEPLOY_DIR`** and **`BASE_TEMPLATE_DIR`** — These are resolved relative to the working directory when the server starts. Use absolute paths if starting the server from a different directory.
 
-> **Windows:** Use forward slashes `/` or doubled backslashes `\\` in paths — Python's `pathlib` handles both.
+> **Windows:** Use forward slashes `/` or doubled backslashes `\\` in paths.
 >
 > **Linux/macOS:** Use standard Unix paths.
 
 ```env
 # Windows absolute path example
-DEPLOY_DIR=C:/path/to/app/generated-apps/latest
-BASE_TEMPLATE_DIR=C:/path/to/app/base-template
+DEPLOY_DIR=C:/planforaplan/generated-apps/latest
+BASE_TEMPLATE_DIR=C:/planforaplan/base-template
 
 # Linux/macOS absolute path example
-DEPLOY_DIR=/home/user/app/generated-apps/latest
-BASE_TEMPLATE_DIR=/home/user/app/base-template
+DEPLOY_DIR=/home/user/planforaplan/generated-apps/latest
+BASE_TEMPLATE_DIR=/home/user/planforaplan/base-template
 ```
 
 **`LOG_LEVEL`** — Use `DEBUG` only for troubleshooting. Debug logging is verbose and may capture request details.
@@ -383,7 +378,9 @@ BASE_TEMPLATE_DIR=/home/user/app/base-template
 
 ## 8. Running in Development Mode
 
-Development mode enables auto-reload on code changes. The host and port are read from `.env` by the start scripts; the manual commands below use the defaults — substitute your configured values if different.
+Development mode enables auto-reload on code changes. The host and port are read from `.env` by the start scripts; the manual commands below use the defaults.
+
+> **Important:** Do not use `--reload` in the start scripts or production deployments. Hot-reload restarts the worker process on file-system changes, wiping the in-memory `_provider` global in `state.py` and causing "Provider not configured" errors. The official start scripts do **not** use `--reload`.
 
 **Windows (PowerShell):**
 ```powershell
@@ -400,51 +397,49 @@ Development mode enables auto-reload on code changes. The host and port are read
 .venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
-The `start.ps1` / `start.bat` / `start.sh` scripts read `APP_HOST` and `APP_PORT` from `.env` and pass them to uvicorn automatically — they are the recommended way to start the server. Changes to `src/app/` files will restart the server automatically.
-
-**Note:** Auto-reload does not restart the generated app subprocess or affect in-memory state (which is reset on server restart).
+Changes to `src/app/` files will restart the server automatically. After each restart you will need to re-enter the API key in the browser UI.
 
 ---
 
 ## 9. Running in Production Mode
 
-For a stable production deployment (no auto-reload):
+For a stable production deployment (no auto-reload), use the official start scripts or the commands below:
 
 **Windows (PowerShell):**
 ```powershell
-.\.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --workers 1
+.\start.ps1
 ```
 
 **Windows (Command Prompt):**
 ```cmd
-.venv\Scripts\uvicorn.exe app.main:app --host 127.0.0.1 --port 8000 --workers 1
+start.bat
 ```
 
 **Linux / macOS:**
 ```bash
-.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 1
+./start.sh
 ```
 
 **Single worker only:** The application uses module-level in-memory state (`state.py`). Multiple workers would not share state and would cause inconsistent behaviour. Always use `--workers 1`.
 
 **Starting automatically on system boot (Windows Service):**
 
-Use NSSM (Non-Sucking Service Manager) or Windows Task Scheduler to start `start.ps1` at login:
+Use NSSM (Non-Sucking Service Manager) or Windows Task Scheduler:
 
 ```powershell
-# Using Task Scheduler (run as administrator) — adjust the path to your app directory
+# Using Task Scheduler (run as administrator)
 $action = New-ScheduledTaskAction -Execute "powershell.exe" `
-    -Argument "-NonInteractive -File C:\path\to\app\start.ps1" `
-    -WorkingDirectory "C:\path\to\app"
+    -Argument "-NonInteractive -File C:\planforaplan\start.ps1" `
+    -WorkingDirectory "C:\planforaplan"
 $trigger = New-ScheduledTaskTrigger -AtLogOn
 Register-ScheduledTask -TaskName "AI App Generator" -Action $action -Trigger $trigger -RunLevel Highest
 ```
 
 For a proper Windows Service installation, NSSM is recommended:
 ```cmd
-nssm install AIAppGenerator "C:\path\to\app\.venv\Scripts\uvicorn.exe"
+nssm install AIAppGenerator "C:\planforaplan\.venv\Scripts\uvicorn.exe"
 nssm set AIAppGenerator AppParameters "app.main:app --host 127.0.0.1 --port 8000"
-nssm set AIAppGenerator AppDirectory "C:\path\to\app"
+nssm set AIAppGenerator AppDirectory "C:\planforaplan"
 nssm start AIAppGenerator
 ```
 
@@ -472,11 +467,9 @@ Invoke-RestMethod http://127.0.0.1:8000/api/status
 ```cmd
 REM 1. Health endpoint
 curl http://127.0.0.1:8000/api/health
-REM Expected: {"status":"ok"}
 
 REM 2. Status endpoint
 curl http://127.0.0.1:8000/api/status
-REM Expected: {"phase":"idle","progress":0,"message":"Ready","url":null}
 
 REM 3. Security headers present
 curl -I http://127.0.0.1:8000/ | findstr "X-Frame-Options X-Content-Type Content-Security"
@@ -486,7 +479,6 @@ curl -I http://127.0.0.1:8000/ | findstr "X-Frame-Options X-Content-Type Content
 ```bash
 # 1. Health endpoint
 curl http://127.0.0.1:8000/api/health
-# Expected: {"status":"ok"}
 
 # 2. Status endpoint
 curl http://127.0.0.1:8000/api/status
@@ -503,7 +495,7 @@ curl -sI http://127.0.0.1:8000/ | grep -i "x-frame-options\|x-content-type\|cont
 
 1. Stop the server (Ctrl+C).
 2. Replace the modified files in `src/app/`.
-3. Start the server with `.\start.ps1` (Windows PowerShell), `start.bat` (Windows CMD), or `./start.sh` (Linux/macOS).
+3. Start the server with `.\start.ps1`, `start.bat`, or `./start.sh`.
 
 ### Dependency Update
 
@@ -524,7 +516,7 @@ curl -sI http://127.0.0.1:8000/ | grep -i "x-frame-options\|x-content-type\|cont
    .venv/bin/pip install -e ".[dev]"
    ```
 4. Rebuild base template venv (see Maintenance Guide Section 5).
-5. Run `.\test.ps1` (Windows PowerShell), `test.bat` (Windows CMD), or `./test.sh` (Linux/macOS) — all tests must pass.
+5. Run `.\test.ps1`, `test.bat`, or `./test.sh` — all tests must pass.
 6. Start the server.
 
 ### Full Reinstall
@@ -586,7 +578,7 @@ server {
 
 1. In `main.py`, update CORS to include the proxy hostname.
 2. Add bearer token authentication middleware.
-3. Change `APP_HOST` to `127.0.0.1` (proxy handles external access).
+3. Keep `APP_HOST` as `127.0.0.1` (proxy handles external access).
 4. Remove `'unsafe-inline'` from CSP by externalising the JavaScript.
 5. Add rate limiting with `slowapi`.
 
@@ -606,7 +598,7 @@ server {
 
 ### PowerShell reports "execution of scripts is disabled on this system"
 
-Run the following in an elevated PowerShell session to allow local scripts:
+Run the following in an elevated PowerShell session:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
@@ -614,25 +606,25 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 
 ### `ModuleNotFoundError: No module named 'app'`
 
-The server cannot find the `src/app` package. Ensure you are running the start script from the app directory and that the package is installed:
+Ensure you are running the start script from the app directory and that the package is installed:
 
 **Windows (PowerShell):**
 ```powershell
-cd C:\path\to\app
+cd C:\planforaplan
 .\.venv\Scripts\pip.exe install -e .
 .\start.ps1
 ```
 
 **Windows (Command Prompt):**
 ```cmd
-cd C:\path\to\app
+cd C:\planforaplan
 .venv\Scripts\pip.exe install -e .
 start.bat
 ```
 
 **Linux / macOS:**
 ```bash
-cd /path/to/app
+cd /path/to/planforaplan
 .venv/bin/pip install -e .
 ./start.sh
 ```
@@ -648,6 +640,10 @@ Run `.\setup.ps1`, `setup.bat`, or `./setup.sh` — they each create `.env` auto
 ### Port 8000 is already in use
 
 Change `APP_PORT` in `.env` to an unused port (e.g., 8080).
+
+### "Provider not configured" after server restart / hot-reload
+
+This occurs when the server restarts (including from `--reload`) because in-memory state is cleared. Re-enter the API key in the browser configuration panel. The official start scripts do not use `--reload` for this reason.
 
 ### Generated apps fail to start with `No module named 'fastapi'`
 
@@ -682,4 +678,4 @@ cd ..
 
 ---
 
-*Document maintained at `app/docs/09-DEPLOYMENT-GUIDE.md`*
+*Document maintained at `C:\planforaplan\docs\09-DEPLOYMENT-GUIDE.md`*

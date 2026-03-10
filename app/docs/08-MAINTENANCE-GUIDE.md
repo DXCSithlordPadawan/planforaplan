@@ -1,7 +1,7 @@
 # AI Application Generator — Maintenance Guide
 
-**Version:** 2.0  
-**Date:** March 2026  
+**Version:** 2.1
+**Date:** 2026-03-10
 **Audience:** DevOps, System Administrators, Lead Developer
 
 ---
@@ -71,7 +71,7 @@ gantt
 ### 3.1 Checking for Outdated Packages
 
 ```cmd
-cd C:\saabdemo\app
+cd C:\planforaplan
 .venv\Scripts\pip.exe list --outdated
 ```
 
@@ -82,7 +82,7 @@ This lists all packages with newer versions available.
 Edit `pyproject.toml` to raise minimum version pins as needed, then reinstall:
 
 ```cmd
-.venv\Scripts\pip.exe install --upgrade fastapi uvicorn anthropic httpx jinja2 pydantic pydantic-settings python-dotenv psutil cryptography python-multipart
+.venv\Scripts\pip.exe install --upgrade fastapi uvicorn anthropic httpx jinja2 pydantic pydantic-settings python-dotenv psutil cryptography python-multipart certifi
 ```
 
 After updating, always rebuild the base template venv and run the full test suite.
@@ -98,7 +98,7 @@ After updating, always rebuild the base template venv and run the full test suit
 If a newer version introduces breaking changes, pin to the last known-good version in `pyproject.toml`:
 
 ```toml
-"fastapi>=0.110.0,<0.120.0",
+"fastapi>=0.115.0,<0.120.0",
 ```
 
 Document the reason for the upper bound in a comment.
@@ -174,7 +174,7 @@ The `base-template/.venv/` is a pre-installed Python virtual environment that is
 ### 5.1 Rebuilding the Base Template venv
 
 ```cmd
-cd C:\saabdemo\app\base-template
+cd C:\planforaplan\base-template
 
 REM Remove existing venv
 rmdir /s /q .venv
@@ -195,7 +195,7 @@ cd ..
 After rebuilding, run the base template directly to confirm it starts:
 
 ```cmd
-cd C:\saabdemo\app\base-template
+cd C:\planforaplan\base-template
 .venv\Scripts\uvicorn.exe main:app --port 8001
 ```
 
@@ -208,10 +208,10 @@ Stop the test with Ctrl+C and return to the app directory.
 If a generated app consistently fails to start because it needs a package not in the base template, add it to `base-template/requirements.txt`:
 
 ```
-fastapi>=0.110.0
-uvicorn[standard]>=0.29.0
-jinja2>=3.1.0
-python-multipart>=0.0.9
+fastapi>=0.115.0
+uvicorn[standard]>=0.34.0
+jinja2>=3.1.5
+python-multipart>=0.0.18
 # Add any other commonly generated packages here
 ```
 
@@ -261,7 +261,7 @@ Each generation overwrites `generated-apps/latest/`. Disk usage is the size of o
 
 To reclaim disk space:
 ```cmd
-rmdir /s /q C:\saabdemo\app\generated-apps\latest
+rmdir /s /q C:\planforaplan\generated-apps\latest
 ```
 
 The directory will be recreated on the next generation.
@@ -271,7 +271,7 @@ The directory will be recreated on the next generation.
 Remove Python bytecode caches periodically:
 
 ```cmd
-cd C:\saabdemo\app
+cd C:\planforaplan
 for /r /d %d in (__pycache__) do @rmdir /s /q "%d"
 del /s /q *.pyc
 ```
@@ -279,7 +279,7 @@ del /s /q *.pyc
 ### 7.3 Checking Disk Usage
 
 ```cmd
-dir C:\saabdemo\app /s | findstr "bytes"
+dir C:\planforaplan /s | findstr "bytes"
 ```
 
 ---
@@ -299,7 +299,7 @@ For patch releases within the same minor version (3.11.x):
 2. Delete and recreate both virtual environments:
 
 ```cmd
-cd C:\saabdemo\app
+cd C:\planforaplan
 rmdir /s /q .venv
 rmdir /s /q base-template\.venv
 setup.bat
@@ -310,7 +310,7 @@ setup.bat
 ### 8.3 Upgrading to a New Minor Release (e.g., 3.11 → 3.12)
 
 Before upgrading:
-1. Review the Python 3.12 changelog for breaking changes affecting the packages used.
+1. Review the Python changelog for breaking changes affecting the packages used.
 2. Update `pyproject.toml` `requires-python` field.
 3. Run the full upgrade as in Section 8.2.
 4. Pay particular attention to `psutil` and `cryptography` as these have native extensions.
@@ -336,23 +336,32 @@ To update:
 
 ### 9.2 Updating the Minimax Model
 
-The Minimax model is in the `MinimaxProvider.generate()` method payload:
+The Minimax default model is in `MinimaxProvider`:
 
 ```python
-"model": "abab6.5s-chat",
+class MinimaxProvider:
+    MODEL = "MiniMax-Text-01"
 ```
 
-Update the model string string to the desired Minimax model and test.
+Update the `MODEL` constant to the desired Minimax model and test. Available models are listed at `platform.minimax.io`.
 
-### 9.3 Adding a New AI Provider
+### 9.3 Updating the Gemini Model
 
-1. Create a new class in `ai_provider.py` implementing the `AIProvider` Protocol.
+The Gemini default model is in `GeminiProvider`:
+
+```python
+class GeminiProvider:
+    MODEL = "gemini-2.0-flash"
+```
+
+Update the `MODEL` constant to the desired Gemini model. Current model names are listed at [Google AI Studio](https://aistudio.google.com).
+
+### 9.4 Adding a New AI Provider
+
+1. Create a new class in `ai_provider.py` implementing the `AIProvider` Protocol (two methods: `__init__` and `async generate(user_prompt, system_prompt) -> str`).
 2. Add a `case "newprovider":` branch in `create_provider()`.
-3. Update the `provider` field pattern in `models/__init__.py`:
-   ```python
-   pattern="^(claude|minimax|newprovider)$"
-   ```
-4. Update the provider dropdown in `templates/index.html`.
+3. Update the `ConfigRequest` model in `models/__init__.py` if the provider name needs to be in the allowed pattern.
+4. Update the provider dropdown in `src/app/templates/index.html`.
 5. Add tests in `tests/test_ai_provider.py`.
 6. Update `02-USER-GUIDE.md`, `03-API-GUIDE.md`, and `01-ARCHITECTURE.md`.
 
@@ -383,7 +392,7 @@ After any significant change:
 4. Enter a test requirement: `"Build a simple todo list app"`
 5. Verify plan generation completes within 30 seconds
 6. Approve the plan and submit for execution
-7. Verify the generated app deploys and browser opens within 3 minutes
+7. Verify the generated app deploys and browser opens within 5 minutes
 8. Verify the generated app is functional at `http://127.0.0.1:8001`
 9. Click Stop and verify the state returns to idle
 
@@ -442,4 +451,4 @@ If the application directory becomes corrupted or a deployment fails:
 
 ---
 
-*Document maintained at `C:\saabdemo\app\docs\08-MAINTENANCE-GUIDE.md`*
+*Document maintained at `C:\planforaplan\docs\08-MAINTENANCE-GUIDE.md`*

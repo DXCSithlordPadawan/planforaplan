@@ -1,8 +1,8 @@
 # AI Application Generator — API Guide
 
-**Version:** 2.0  
-**Date:** March 2026  
-**Base URL:** `http://127.0.0.1:8000`  
+**Version:** 2.1
+**Date:** 2026-03-10
+**Base URL:** `http://127.0.0.1:8000`
 **Interactive Docs:** `http://127.0.0.1:8000/docs` (FastAPI Swagger UI)
 
 ---
@@ -119,27 +119,35 @@ Liveness check. Returns immediately without touching any external services.
 
 ### POST /api/config
 
-Validates AI provider credentials and stores them in process memory. A probe call is made to the provider to confirm the key works before it is stored.
+Stores AI provider credentials in process memory. The provider instance is created and stored immediately — no probe call is made. An invalid key will surface naturally on the first `/api/plan` or `/api/generate` call.
 
 **Request body:**
 
 | Field | Type | Required | Constraints | Description |
 |-------|------|----------|-------------|-------------|
-| `provider` | string | Yes | `^[A-Za-z0-9_-]+$`, 1–64 chars | AI provider name |
+| `provider` | string | Yes | `^[A-Za-z0-9_-]+$`, 1–64 chars | AI provider name (case-insensitive) |
 | `api_key` | string | Yes | 10–512 characters | Provider API key |
-| `base_url` | string | Conditional | Valid `http://` or `https://` URL | Required for custom providers |
-| `model` | string | Conditional | 1–256 characters | Required for custom providers |
+| `base_url` | string | Conditional | Valid URL | Required for custom OpenAI-compatible providers |
+| `model` | string | Conditional | 1–256 characters | Required for custom providers; optional override for built-ins |
 
 **Built-in provider names** (case-insensitive):
 
-| Value | Provider |
-|-------|---------|
-| `claude` | Anthropic Claude (claude-sonnet-4-20250514) |
-| `minimax` | Minimax (abab6.5s-chat) |
-| `gemini` | Google Gemini (gemini-1.5-pro) |
-| _(any other)_ | Custom OpenAI-compatible — requires `base_url` and `model` |
+| Value | Provider | Default Model |
+|-------|---------|--------------|
+| `claude` | Anthropic Claude | `claude-sonnet-4-20250514` |
+| `minimax` | Minimax | `MiniMax-Text-01` |
+| `gemini` | Google Gemini | `gemini-2.0-flash` |
+| _(any other)_ | Custom OpenAI-compatible | Must supply `base_url` and `model` |
 
-**Example — built-in provider:**
+**Example — Claude:**
+```json
+{
+  "provider": "claude",
+  "api_key": "sk-ant-..."
+}
+```
+
+**Example — Gemini:**
 ```json
 {
   "provider": "gemini",
@@ -147,13 +155,23 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 }
 ```
 
-**Example — custom OpenAI-compatible provider:**
+**Example — Custom OpenAI-compatible (e.g. OpenRouter, Ollama, Azure OpenAI):**
 ```json
 {
-  "provider": "my-llm",
-  "api_key": "my-api-key",
-  "base_url": "https://api.example.com/v1",
-  "model": "my-model-name"
+  "provider": "openrouter",
+  "api_key": "sk-or-...",
+  "base_url": "https://openrouter.ai/api/v1",
+  "model": "anthropic/claude-3.5-sonnet"
+}
+```
+
+**Example — Local Ollama:**
+```json
+{
+  "provider": "ollama",
+  "api_key": "ollama",
+  "base_url": "http://localhost:11434/v1",
+  "model": "llama3"
 }
 ```
 
@@ -164,31 +182,12 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 }
 ```
 
-**Response 401 — Invalid key:**
-```json
-{
-  "detail": "Invalid Claude API key."
-}
-```
-
-**Response 422 — Validation error (unknown provider without base_url/model):**
-```json
-{
-  "detail": [
-    {
-      "type": "value_error",
-      "loc": ["body"],
-      "msg": "'base_url' is required for custom provider 'my-llm'"
-    }
-  ]
-}
-```
-
 **Notes:**
-- The probe call sends "Hello" with system prompt "Reply with the single word: ok". This consumes a minimal number of tokens.
+- No probe call is made. Configuration always succeeds at this endpoint.
+- Invalid keys surface on the first `/api/plan` or `/api/generate` call.
+- Calling this endpoint again replaces the stored provider.
 - The API key is never returned in any response.
-- All outbound HTTPS connections use the **certifi** CA bundle to avoid `SSL: CERTIFICATE_VERIFY_FAILED` errors on systems with incomplete trust stores.
-- Calling this endpoint again with a new provider or key replaces the stored provider.
+- All outbound HTTPS connections use the **certifi** CA bundle merged with the OS trust store to prevent `SSL: CERTIFICATE_VERIFY_FAILED` errors.
 
 ---
 
@@ -196,7 +195,7 @@ Validates AI provider credentials and stores them in process memory. A probe cal
 
 Stage 1 of the two-stage workflow. Sends the requirement to the configured AI provider and returns a markdown implementation plan.
 
-This is a **synchronous** endpoint — it awaits the AI response before returning. Expect 15–30 seconds response time.
+This is a **synchronous** endpoint — it awaits the AI response before returning. Expect 15–60 seconds response time depending on provider and model.
 
 **Request body:**
 
@@ -234,7 +233,7 @@ This is a **synchronous** endpoint — it awaits the AI response before returnin
 ```
 
 **Notes:**
-- The `refine: true` flag prepends: `"Refine and improve the following plan based on the requirement:\n\n"` before the requirement text. Use this when calling plan generation a second time to improve an existing plan.
+- The `refine: true` flag prepends a refinement instruction before the requirement text. Use this when calling plan generation a second time to improve an existing plan.
 - The plan is a free-form markdown string. Its length depends on the AI provider and requirement complexity.
 
 ---
@@ -283,20 +282,21 @@ This endpoint returns **immediately** (HTTP 200) before generation is complete. 
 
 **Background task pipeline:**
 
-The background task executes these steps in order, broadcasting WebSocket messages at each stage:
-
 | Step | State phase | Progress |
 |------|------------|---------|
-| Start AI code generation | `generating` | 20% |
+| Start AI code generation (streaming) | `generating` | 20% |
 | AI response received, parsing files | `generating` | 50% |
 | Copy base template | `deploying` | 60% |
 | Write generated files | `deploying` | 70% |
+| Install extra dependencies | `deploying` | 75% |
 | Start uvicorn subprocess | `deploying` | 80% |
 | uvicorn ready signal received | `running` | 100% |
 
+During the AI generation step, a heartbeat task calls `set_status()` every second to keep the stale-phase guard from triggering. The stale timeout is 600 seconds (10 minutes).
+
 On success, the browser is opened automatically and state is set to `running` with the `url` field populated.
 
-On any error, state is set to `idle` at progress 0, and the error message is broadcast via WebSocket.
+On any error, state is set to `idle` at progress 0 and the error message is broadcast via WebSocket.
 
 ---
 
@@ -353,9 +353,9 @@ Terminates the running generated application and resets state to idle.
 ```
 
 **Notes:**
-- Uses `psutil` to terminate the full process tree (parent uvicorn and all children).
-- Safe to call even when no app is running — returns 200 regardless.
-- A WebSocket broadcast `{"level": "info", "message": "Generated application stopped."}` is emitted.
+- Uses `psutil` to terminate the full process tree.
+- Safe to call when no app is running — returns 200 regardless.
+- A WebSocket broadcast is emitted on stop.
 
 ---
 
@@ -365,7 +365,7 @@ Terminates the running generated application and resets state to idle.
 
 **Protocol:** Plain WebSocket (no subprotocol).
 
-Connect before or during a generation to receive real-time log messages. All broadcast messages during `POST /api/generate` are delivered to connected clients.
+Connect before or during a generation to receive real-time log messages.
 
 ### Message Format
 
@@ -385,7 +385,7 @@ All messages are JSON strings:
 
 ### Keep-Alive
 
-The server keeps the connection open by waiting for `receive_text()`. Send any text (e.g. `"ping"`) from the client to keep the connection alive if your WebSocket client requires it.
+Send any text (e.g. `"ping"`) from the client to keep the connection alive.
 
 ### JavaScript Example
 
@@ -425,7 +425,6 @@ asyncio.run(watch_logs())
 |------|---------|-----------|
 | 200 | OK | Successful GET or POST |
 | 400 | Bad Request | Provider not configured; logic precondition failed |
-| 401 | Unauthorised | AI provider rejected the API key |
 | 409 | Conflict | Generation already in progress |
 | 422 | Unprocessable Entity | Pydantic field validation failed |
 | 502 | Bad Gateway | AI provider returned an error or network failure |
@@ -434,15 +433,13 @@ asyncio.run(watch_logs())
 
 ## 8. Workflow Sequence
 
-The complete API call sequence for a full generation cycle:
-
 ```mermaid
 sequenceDiagram
     participant C as API Client
     participant S as Server :8000
     participant WS as WebSocket
 
-    C->>S: POST /api/health
+    C->>S: GET /api/health
     S-->>C: 200 {status: "ok"}
 
     C->>S: POST /api/config
@@ -451,7 +448,7 @@ sequenceDiagram
     C->>WS: Connect ws://127.0.0.1:8000/ws/logs
 
     C->>S: POST /api/plan {requirement}
-    Note over S: ~15-30s AI call
+    Note over S: ~15-60s AI call
     S-->>C: 200 {plan: "..."}
 
     C->>S: POST /api/generate {requirement, plan}
@@ -479,20 +476,23 @@ sequenceDiagram
 
 ```python
 import httpx
-import asyncio
-import json
 import time
 
 BASE = "http://127.0.0.1:8000"
 
-def configure(provider: str, api_key: str) -> None:
-    r = httpx.post(f"{BASE}/api/config", json={"provider": provider, "api_key": api_key})
+def configure(provider: str, api_key: str, base_url: str = None, model: str = None) -> None:
+    body = {"provider": provider, "api_key": api_key}
+    if base_url:
+        body["base_url"] = base_url
+    if model:
+        body["model"] = model
+    r = httpx.post(f"{BASE}/api/config", json=body)
     r.raise_for_status()
     print("Configured:", r.json())
 
 def generate_plan(requirement: str) -> str:
     print("Generating plan...")
-    r = httpx.post(f"{BASE}/api/plan", json={"requirement": requirement}, timeout=60)
+    r = httpx.post(f"{BASE}/api/plan", json={"requirement": requirement}, timeout=120)
     r.raise_for_status()
     return r.json()["plan"]
 
@@ -504,7 +504,7 @@ def generate_app(requirement: str, plan: str) -> None:
     )
     r.raise_for_status()
 
-def wait_for_running(timeout: int = 180) -> str:
+def wait_for_running(timeout: int = 600) -> str:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         r = httpx.get(f"{BASE}/api/status")
@@ -531,16 +531,26 @@ if __name__ == "__main__":
 # Health check
 curl http://127.0.0.1:8000/api/health
 
-# Configure
+# Configure (Claude)
 curl -X POST http://127.0.0.1:8000/api/config \
   -H "Content-Type: application/json" \
   -d '{"provider": "claude", "api_key": "sk-ant-..."}'
+
+# Configure (Gemini)
+curl -X POST http://127.0.0.1:8000/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "gemini", "api_key": "AIzaSy..."}'
+
+# Configure (Custom / OpenRouter)
+curl -X POST http://127.0.0.1:8000/api/config \
+  -H "Content-Type: application/json" \
+  -d '{"provider": "openrouter", "api_key": "sk-or-...", "base_url": "https://openrouter.ai/api/v1", "model": "anthropic/claude-3.5-sonnet"}'
 
 # Generate plan
 curl -X POST http://127.0.0.1:8000/api/plan \
   -H "Content-Type: application/json" \
   -d '{"requirement": "Build a contact list app"}' \
-  --max-time 60
+  --max-time 120
 
 # Generate app (returns immediately)
 curl -X POST http://127.0.0.1:8000/api/generate \
@@ -556,5 +566,5 @@ curl -X POST http://127.0.0.1:8000/api/stop
 
 ---
 
-*Document maintained at `C:\saabdemo\app\docs\03-API-GUIDE.md`*  
+*Document maintained at `C:\planforaplan\docs\03-API-GUIDE.md`*
 *Interactive API documentation available at `http://127.0.0.1:8000/docs` when the server is running.*

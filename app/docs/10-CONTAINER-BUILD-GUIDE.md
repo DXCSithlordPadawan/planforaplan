@@ -1,7 +1,7 @@
 # AI Application Generator — Container Build Guide
 
-**Version:** 2.1  
-**Date:** March 2026  
+**Version:** 2.2  
+**Date:** 2026-03-10  
 **Audience:** DevOps, System Administrators  
 **Container Runtime:** Podman (preferred) · Docker (compatible)  
 **Security Standard:** CIS Benchmark Level 2 · NIST SP 800-53 · FIPS 140-3
@@ -105,7 +105,7 @@ The complete `Containerfile` is at `app/Containerfile`. Here is a line-by-line e
 ```dockerfile
 FROM python:3.12-slim
 ```
-Uses the official Python 3.12 slim image (Debian-based, minimal packages). The slim variant reduces image size and attack surface compared to the full `python:3.12` image. This image is publicly available on Docker Hub — no credentials required.
+Uses the official Python 3.12 slim image (Debian-based, minimal packages). The slim variant reduces image size and attack surface compared to the full `python:3.12` image. Python 3.12 was chosen because it is the current LTS-supported release as of the build date. This image is publicly available on Docker Hub — no credentials required.
 
 ---
 
@@ -219,7 +219,7 @@ Use `--no-cache` when updating Python dependencies to ensure the new versions ar
 ### Expected Build Output
 
 ```
-STEP 1/10: FROM python:3.11-slim
+STEP 1/10: FROM python:3.12-slim
 STEP 2/10: RUN useradd --create-home appuser
 STEP 3/10: WORKDIR /home/appuser/app
 STEP 4/10: COPY pyproject.toml .
@@ -780,9 +780,9 @@ When running with `--read-only`, the container's root filesystem is immutable. O
 | All capabilities dropped | `--cap-drop ALL` (runtime) | CIS L2, NIST AC-6 |
 | No privilege escalation | `--security-opt no-new-privileges` | CIS L2 |
 | Localhost port binding | `-p 127.0.0.1:8000:8000` | NIST AC-3 |
-| FIPS 140-3 crypto | `cryptography>=42.0.0` in pip deps | FIPS 140-3 |
+| FIPS 140-3 crypto | `cryptography>=44.0.0` in pip deps | FIPS 140-3 |
 
 ---
 
-*Document maintained at `app/docs/10-CONTAINER-BUILD-GUIDE.md`*  
+*Document maintained at `C:\planforaplan\docs\10-CONTAINER-BUILD-GUIDE.md`*  
 *References: Podman documentation — https://docs.podman.io; CIS Docker Benchmark — https://www.cisecurity.org/benchmark/docker; NIST SP 800-190 (Container Security) — https://csrc.nist.gov/publications/detail/sp/800-190/final*

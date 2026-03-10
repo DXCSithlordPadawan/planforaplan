@@ -1,7 +1,7 @@
 # AI Application Generator — RACI Document
 
-**Version:** 2.0  
-**Date:** March 2026  
+**Version:** 2.1
+**Date:** 2026-03-10
 **Standard:** RACI (Responsible, Accountable, Consulted, Informed)
 
 ---
@@ -67,13 +67,13 @@
 
 | Activity | App Owner | Lead Dev | DevOps | QA | Security Officer |
 |----------|-----------|----------|--------|----|-----------------|
-| Install Python environment and dependencies (`setup.bat`) | I | C | R/A | I | I |
+| Install Python environment and dependencies (`setup.bat`/`setup.ps1`) | I | C | R/A | I | I |
 | Configure `.env` file for deployment | I | C | R/A | I | C |
-| Start the orchestrator server (`start.bat`) | I | I | R/A | I | I |
+| Start the orchestrator server (`start.bat`/`start.ps1`) | I | I | R/A | I | I |
 | Build Podman container image | I | C | R/A | I | C |
 | Run container image | I | C | R/A | I | C |
 | Monitor server health (`/api/health`) | I | I | R/A | I | I |
-| Apply dependency updates (`pip install --upgrade`) | I | C | R/A | C | A |
+| Apply dependency updates | I | C | R/A | C | A |
 | Rotate AI provider API keys | A | I | C | I | R |
 | Manage base template venv | I | R/A | C | I | I |
 | Monitor port availability (8000, 8001) | I | I | R/A | I | I |
@@ -85,7 +85,7 @@
 | Activity | App Owner | Lead Dev | DevOps | QA | Security Officer |
 |----------|-----------|----------|--------|----|-----------------|
 | Define security requirements | A | C | C | I | R |
-| Implement security controls (middleware, path validation) | I | R/A | I | C | C |
+| Implement security controls (middleware, path validation, certifi) | I | R/A | I | C | C |
 | Conduct security review of new code | I | C | I | C | R/A |
 | Resolve bandit HIGH findings | A | R | I | C | C |
 | Resolve pip-audit CRITICAL/HIGH CVEs | A | R | C | I | C |
@@ -101,9 +101,10 @@
 | Activity | App Owner | L1 Support | L2 Support | Lead Dev | DevOps |
 |----------|-----------|-----------|-----------|----------|--------|
 | Handle user API key errors | I | R/A | I | I | I |
-| Handle user configuration questions | I | R/A | I | I | I |
+| Handle user configuration questions (all providers) | I | R/A | I | I | I |
 | Diagnose server startup failures | I | C | R/A | C | C |
 | Resolve port conflict issues | I | I | R/A | C | C |
+| Diagnose template generation warnings | I | C | C | R/A | I |
 | Escalate code-level defects | I | R | C | A | I |
 | Communicate outages to users | A | R | C | I | I |
 | Document workarounds in support guide | I | R | C | A | I |
@@ -121,6 +122,7 @@
 | Evaluate new AI providers | A | R | I | C |
 | Update `create_provider` factory for new provider | I | R/A | I | I |
 | Update `ConfigRequest.provider` pattern | I | R/A | I | C |
+| Update provider dropdown in UI template | I | R/A | I | I |
 
 ---
 
@@ -138,8 +140,9 @@
 | Maintain RBAC document | A | C | C | I | R |
 | Maintain Maintenance Guide | I | C | R/A | C | I |
 | Maintain Support Tasks Guide | I | C | C | C | I |
+| Maintain Bug Fix Log | I | R/A | I | I | I |
 | Review all docs on each major release | A | R | R | R | R |
 
 ---
 
-*Document maintained at `C:\saabdemo\app\docs\05-RACI.md`*
+*Document maintained at `C:\planforaplan\docs\05-RACI.md`*
