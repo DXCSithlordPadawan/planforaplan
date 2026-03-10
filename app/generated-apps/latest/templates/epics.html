@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+
+{% block title %}Epics - Nine Men Morris Project{% endblock %}
+
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="text-center mb-8">
+        <h1 class="text-3xl font-bold text-white mb-4">Project Epics</h1>
+        <p class="text-gray-300">High-level features and capabilities for the Nine Men Morris project</p>
+    </div>
+
+    <div class="grid gap-6">
+        {% for epic in epics %}
+        <div class="bg-dark-secondary rounded-lg p-6 border border-gray-700 hover:border-green-500 transition-colors">
+            <div class="flex items-start justify-between mb-4">
+                <div class="flex-1">
+                    <div class="flex items-center mb-2">
+                        <span class="inline-block bg-green-600 text-white text-xs font-medium px-2 py-1 rounded-full mr-3">
+                            Epic {{ epic.id }}
+                        </span>
+                        <h2 class="text-xl font-bold text-white">{{ epic.title }}</h2>
+                    </div>
+                    <p class="text-gray-300 leading-relaxed">{{ epic.description }}</p>
+                </div>
+            </div>
+            
+            <div class="border-t border-gray-600 pt-4">
+                <h3 class="text-sm font-semibold text-white mb-2">Related User Stories:</h3>
+                <div class="flex flex-wrap gap-2">
+                    {% for story_id in epic.story_ids %}
+                    <span class="inline-block bg-purple-600 text-white text-xs font-medium px-2 py-1 rounded">
+                        Story {{ story_id }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-gray-600">
+                <div class="flex items-center justify-between text-sm text-gray-400">
+                    <span>Priority: {{ epic.priority }}</span>
+                    <span>{{ epic.story_ids|length }} User Stories</span>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Epic Summary -->
+    <div class="mt-8 bg-dark-accent rounded-lg p-6 border border-gray-600">
+        <h3 class="text-lg font-semibold text-white mb-4">Epic Summary</h3>
+        <div class="grid md:grid-cols-3 gap-6 text-sm">
+            <div class="text-center">
+                <div class="text-2xl font-bold text-green-400">{{ epics|length }}</div>
+                <div class="text-gray-300">Total Epics</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-purple-400">
+                    {% set total_stories = [] %}
+                    {% for epic in epics %}
+                        {% set _ = total_stories.extend(epic.story_ids) %}
+                    {% endfor %}
+                    {{ total_stories|length }}
+                </div>
+                <div class="text-gray-300">Total User Stories</div>
+            </div>
+            <div class="text-center">
+                <div class="text-2xl font-bold text-orange-400">High</div>
+                <div class="text-gray-300">Overall Priority</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="mt-8 text-center">
+        <div class="space-x-4">
+            <a href="/stories" class="inline-block bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                View User Stories
+            </a>
+            <a href="/tasks" class="inline-block bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-6 rounded-lg transition-colors">
+                View Tasks
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

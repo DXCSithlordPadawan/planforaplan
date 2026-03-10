@@ -114,30 +114,46 @@ class ClaudeProvider:
         await self._http_client.aclose()
 
     async def generate(self, user_prompt: str, system_prompt: str) -> str:
-        """Call the Claude Messages API and return the response text."""
+        """Call the Claude Messages API via streaming and return the full text.
+
+        Streaming is required by the Anthropic SDK when max_tokens is large
+        enough that the request could exceed the 10-minute non-streaming
+        timeout threshold.  We collect all streamed text_delta events and
+        return the concatenated result, which is functionally identical to a
+        non-streaming call from the caller's perspective.
+        """
         # Build kwargs conditionally: the Anthropic SDK rejects an empty string
-        # for the system parameter on some versions, causing a silent hang.
-        create_kwargs: dict[str, object] = {
+        # for the system parameter on some versions.
+        stream_kwargs: dict[str, object] = {
             "model": self._model,
-            "max_tokens": 8192,
+            "max_tokens": 32768,
             "messages": [{"role": "user", "content": user_prompt}],
         }
         if system_prompt:
-            create_kwargs["system"] = system_prompt
+            stream_kwargs["system"] = system_prompt
 
         try:
-            message = await self._client.messages.create(**create_kwargs)
-            # Guard: an empty content list would cause an unhandled IndexError.
-            if not message.content:
-                stop_reason = getattr(message, "stop_reason", "unknown")
+            text_parts: list[str] = []
+            async with self._client.messages.stream(**stream_kwargs) as stream:
+                async for text in stream.text_stream:
+                    text_parts.append(text)
+
+            full_text = "".join(text_parts)
+
+            # Guard: an empty response indicates a safety block or truncation.
+            if not full_text.strip():
+                final_msg = await stream.get_final_message()
+                stop_reason = getattr(final_msg, "stop_reason", "unknown")
                 logger.warning(
-                    "Claude returned empty content list. stop_reason=%s", stop_reason
+                    "Claude stream produced empty text. stop_reason=%s", stop_reason
                 )
                 raise AIProviderError(
                     f"Claude returned no content (stop_reason: {stop_reason!r}). "
                     "The response may have been blocked or truncated. Please retry."
                 )
-            return message.content[0].text
+
+            return full_text
+
         except anthropic.AuthenticationError as exc:
             raise AIProviderError("Invalid Claude API key.") from exc
         except anthropic.RateLimitError as exc:

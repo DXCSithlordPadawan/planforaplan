@@ -46,6 +46,13 @@ Required files (include all of these):
                    if __name__ == "__main__":
                        import uvicorn
                        uvicorn.run(app, host="127.0.0.1", port=8001)
+                 IMPORTANT — import paths: the deployment directory is the working
+                 directory. Use flat relative imports only.
+                 CORRECT:   from routers import game_routes
+                 CORRECT:   from services.planning_service import PlanningService
+                 WRONG:     from app.routers import game_routes
+                 WRONG:     from app.services import anything
+                 There is NO 'app' package in the deploy directory.
 - requirements.txt — one pip package per line (fastapi, uvicorn[standard], jinja2, etc.)
 - templates/index.html — the ACTUAL rendered landing page served by GET /.
                          This MUST contain real visible HTML content for the user.
